@@ -1,0 +1,285 @@
+🟢 NORMAL STATUS DETECTED
+
+Status:
+Safe
+
+Detected Signs:
+- Normal heart rate
+- Normal SpO₂
+- Normal movement pattern
+
+Recommendation:
+ไม่พบความผิดปกติ สามารถใช้งานได้ตามปกติ
+
+──────────────────────────────
+
+🟡 HIGH STRESS LEVEL DETECTED
+
+Status:
+Watch
+
+Detected Signs:
+- Elevated stress response
+
+Recommendation:
+พักผ่อน ฝึกหายใจลึก และลดความเครียด
+
+──────────────────────────────
+
+🟡 ABNORMAL ACTIVITY DETECTED
+
+Status:
+Watch
+
+Detected Signs:
+- Activity pattern differs from normal behavior
+
+Recommendation:
+ติดตามอาการและสังเกตความผิดปกติของร่างกาย
+
+──────────────────────────────
+
+🟠 DROWSINESS RISK DETECTED
+
+Status:
+Warning
+
+Detected Signs:
+- Low movement
+- Decreasing heart rate
+- Reduced alertness pattern
+
+Recommendation:
+พักผ่อนอย่างน้อย 15–20 นาที ก่อนทำกิจกรรมที่ต้องใช้สมาธิ
+
+──────────────────────────────
+
+🟠 FATIGUE RISK DETECTED
+
+Status:
+Warning
+
+Detected Signs:
+- Fatigue pattern detected
+- Elevated stress level
+- Abnormal heart rate trend
+
+Recommendation:
+หยุดพัก ดื่มน้ำ และหลีกเลี่ยงกิจกรรมที่ใช้พลังงานสูง
+
+──────────────────────────────
+
+🟠 LOW SpO₂ RISK DETECTED
+
+SpO₂: 88%
+
+Status:
+Warning
+
+Recommendation:
+พักในบริเวณที่อากาศถ่ายเทและติดตามค่า SpO₂ อย่างต่อเนื่อง
+
+──────────────────────────────
+
+🟠 ALCOHOL-LIKE IMPAIRMENT RISK DETECTED
+
+Status:
+Warning
+
+Detected Signs:
+- Irregular movement pattern
+- Reduced body control
+
+Recommendation:
+หลีกเลี่ยงการขับรถหรือใช้งานเครื่องจักร
+
+──────────────────────────────
+
+🟠 IMMOBILIZATION ALERT
+
+Status:
+Warning
+
+Detected Signs:
+- No movement detected for extended period
+
+Recommendation:
+กรุณายืนยันว่าปลอดภัย
+
+──────────────────────────────
+
+🟠 SEVERE STRESS DETECTED
+
+Status:
+Warning
+
+Detected Signs:
+- Continuous high stress level
+- Increased heart rate
+
+Recommendation:
+พักผ่อนและลดกิจกรรมที่ก่อให้เกิดความเครียด
+
+──────────────────────────────
+
+🔴 CARDIAC RISK DETECTED
+
+Heart Rate: 165 BPM
+
+Status:
+Emergency
+
+Recommendation:
+หยุดกิจกรรมและตรวจสอบอาการทันที
+
+──────────────────────────────
+
+🔴 LOW HEART RATE DETECTED
+
+Heart Rate: 38 BPM
+
+Status:
+Emergency
+
+Recommendation:
+นั่งพักและสังเกตอาการ หากมีอาการเวียนศีรษะควรพบแพทย์
+
+──────────────────────────────
+
+🔴 CRITICAL LOW SpO₂ DETECTED
+
+SpO₂: 82%
+
+Status:
+Emergency
+
+Recommendation:
+หยุดกิจกรรมทันทีและขอความช่วยเหลือทางการแพทย์
+
+──────────────────────────────
+
+🔴 FALL RISK DETECTED
+
+Status:
+Emergency
+
+Detected Signs:
+- High impact detected
+- No movement after impact
+
+Recommendation:
+กรุณายืนยันว่าปลอดภัย หากไม่ตอบสนองให้ติดต่อผู้ดูแล
+
+──────────────────────────────
+
+🔴 POSSIBLE FALL WITH INJURY
+
+Status:
+Emergency
+
+Detected Signs:
+- Severe impact detected
+- Heart rate abnormal
+- No movement detected
+
+Recommendation:
+แจ้งผู้ติดต่อฉุกเฉินทันที
+
+──────────────────────────────
+
+🔴 SEIZURE-LIKE RISK DETECTED
+
+Status:
+Emergency
+
+Detected Signs:
+- Repetitive abnormal motion
+- High gyroscope activity
+
+Recommendation:
+ตรวจสอบความปลอดภัยของผู้ใช้และขอความช่วยเหลือหากจำเป็น
+
+──────────────────────────────
+
+🔴 SEVERE SEIZURE-LIKE ACTIVITY DETECTED
+
+Status:
+Emergency
+
+Detected Signs:
+- Continuous abnormal movement
+- Elevated heart rate
+
+Recommendation:
+ติดต่อผู้ดูแลหรือหน่วยแพทย์ฉุกเฉินทันที
+
+──────────────────────────────
+
+🔴 SEVERE ALCOHOL-LIKE IMPAIRMENT DETECTED
+
+Status:
+Emergency
+
+Detected Signs:
+- Severe balance instability
+- Abnormal movement pattern
+
+Recommendation:
+หยุดกิจกรรมที่มีความเสี่ยงและขอความช่วยเหลือ
+
+──────────────────────────────
+
+🔴 POSSIBLE UNCONSCIOUSNESS DETECTED
+
+Status:
+Emergency
+
+Detected Signs:
+- No movement detected
+- Vital signs abnormal
+
+Recommendation:
+แจ้งผู้ติดต่อฉุกเฉินและตรวจสอบผู้ใช้ทันที
+
+──────────────────────────────
+
+🔴 DROWSINESS RISK + LOW SpO₂ RISK
+
+Status:
+Emergency
+
+Detected Signs:
+- Low movement
+- Decreasing heart rate
+- Low oxygen saturation
+
+Recommendation:
+หยุดกิจกรรม พักผ่อน และตรวจสอบสภาพร่างกายทันที
+
+──────────────────────────────
+
+🔴 FALL RISK + CARDIAC RISK
+
+Status:
+Emergency
+
+Detected Signs:
+- Fall detected
+- Abnormal heart rate
+
+Recommendation:
+แจ้งผู้ติดต่อฉุกเฉินและตรวจสอบผู้ใช้ทันที
+
+──────────────────────────────
+
+🔴 SEIZURE-LIKE RISK + FALL RISK
+
+Status:
+Emergency
+
+Detected Signs:
+- Seizure-like movement
+- Fall detected
+
+Recommendation:
+ขอความช่วยเหลือทางการแพทย์ทันที
