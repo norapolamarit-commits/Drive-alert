@@ -18,6 +18,7 @@ class CloudService {
     required Map<String, dynamic> userProfile,
     required int battery,
     required String bleStatus,
+    required String sensorStatus,
   }) async {
     if (baseUrl.trim().isEmpty) return false;
     return _post(
@@ -30,6 +31,7 @@ class CloudService {
         'userProfile': userProfile,
         'battery': battery,
         'bleStatus': bleStatus,
+        'sensorStatus': sensorStatus,
       },
     );
   }

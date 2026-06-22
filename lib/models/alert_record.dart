@@ -33,11 +33,14 @@ class AlertRecord {
       };
 
   factory AlertRecord.fromJson(Map<String, dynamic> json) => AlertRecord(
-        id: json['id']?.toString() ?? DateTime.now().microsecondsSinceEpoch.toString(),
+        id: json['id']?.toString() ??
+            DateTime.now().microsecondsSinceEpoch.toString(),
         timestamp: DateTime.tryParse(json['timestamp']?.toString() ?? '') ??
             DateTime.now(),
-        sensorData: SensorData.fromJson(json['sensorData'] as Map<String, dynamic>),
-        riskResult: RiskResult.fromJson(json['riskResult'] as Map<String, dynamic>),
+        sensorData:
+            SensorData.fromJson(json['sensorData'] as Map<String, dynamic>),
+        riskResult:
+            RiskResult.fromJson(json['riskResult'] as Map<String, dynamic>),
         userResponse: json['userResponse']?.toString() ?? '',
       );
 }

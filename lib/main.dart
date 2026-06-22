@@ -12,7 +12,6 @@ import 'models/sensor_risk_sample.dart';
 import 'screens/alert_history_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/graph_screen.dart';
-import 'screens/health_history_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/setup_screen.dart';
 import 'services/alert_storage_service.dart';
@@ -20,22 +19,23 @@ import 'services/ble_service.dart';
 import 'services/cloud_service.dart';
 import 'services/location_service.dart';
 import 'services/mock_data_service.dart';
+import 'services/notification_service.dart';
 import 'services/phratuma_service.dart';
 import 'services/risk_analyzer.dart';
 
 void main() {
-  runApp(const VitaGuardApp());
+  runApp(const DzozApp());
 }
 
-class VitaGuardApp extends StatelessWidget {
-  const VitaGuardApp({super.key});
+class DzozApp extends StatelessWidget {
+  const DzozApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => VitaGuardState()..initialize(),
+      create: (_) => DzozState()..initialize(),
       child: MaterialApp(
-        title: 'Vita gaurd',
+        title: 'Dzoz',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(
@@ -63,45 +63,43 @@ class VitaGuardApp extends StatelessWidget {
             ),
           ),
         ),
-        home: const VitaGuardGate(),
+        home: const DzozGate(),
       ),
     );
   }
 }
 
-class VitaGuardGate extends StatelessWidget {
-  const VitaGuardGate({super.key});
+class DzozGate extends StatelessWidget {
+  const DzozGate({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final setupDone = context.watch<VitaGuardState>().setupDone;
-    return setupDone ? const VitaGuardShell() : const SetupScreen();
+    final setupDone = context.watch<DzozState>().setupDone;
+    return setupDone ? const DzozShell() : const SetupScreen();
   }
 }
 
-class VitaGuardShell extends StatefulWidget {
-  const VitaGuardShell({super.key});
+class DzozShell extends StatefulWidget {
+  const DzozShell({super.key});
 
   @override
-  State<VitaGuardShell> createState() => _VitaGuardShellState();
+  State<DzozShell> createState() => _DzozShellState();
 }
 
-class _VitaGuardShellState extends State<VitaGuardShell> {
+class _DzozShellState extends State<DzozShell> {
   int _index = 0;
 
   static const _screens = [
     DashboardScreen(),
     GraphScreen(),
     AlertHistoryScreen(),
-    HealthHistoryScreen(),
     ProfileScreen(),
   ];
 
   static const _tabLabels = [
     'Current Health Status',
-    'Health Data',
+    'Health Data & History',
     'Risk Alert Log',
-    'Health History',
     'Profile',
   ];
 
@@ -109,7 +107,6 @@ class _VitaGuardShellState extends State<VitaGuardShell> {
     'Status',
     'Data',
     'Alerts',
-    'History',
     'Profile',
   ];
 
@@ -117,7 +114,6 @@ class _VitaGuardShellState extends State<VitaGuardShell> {
     Icons.watch_outlined,
     Icons.monitor_heart_outlined,
     Icons.notifications_active_outlined,
-    Icons.history_outlined,
     Icons.person_outline,
   ];
 
@@ -319,7 +315,7 @@ class _StreamlitTab extends StatelessWidget {
   }
 }
 
-class VitaGuardState extends ChangeNotifier {
+class DzozState extends ChangeNotifier {
   final MockDataService _mockDataService = MockDataService();
   final RiskAnalyzer _riskAnalyzer = RiskAnalyzer();
   final AlertStorageService _alertStorage = AlertStorageService();
@@ -327,6 +323,7 @@ class VitaGuardState extends ChangeNotifier {
   final BleService _bleService = BleService();
   final CloudService _cloudService = CloudService();
   final LocationService _locationService = LocationService();
+  final NotificationService _notificationService = NotificationService();
 
   SensorData currentSensor = SensorData(
     heartRate: 78,
@@ -356,7 +353,7 @@ class VitaGuardState extends ChangeNotifier {
   final List<ChatMessage> chatMessages = [
     ChatMessage(
       text:
-          'Hello, I am Vita gaurd assistant. I can explain early warnings, sensor values, actions, and history.',
+          'Hello, I am Dzoz assistant. I can explain early warnings, sensor values, actions, and history.',
       isUser: false,
     ),
   ];
@@ -366,6 +363,7 @@ class VitaGuardState extends ChangeNotifier {
   bool mockChatbotResponse = false;
   bool cloudEnabled = false;
   String language = 'English';
+  String userId = '';
   String deviceId = '';
   String phratumaEndpoint = 'https://your-render-or-mock-api.example.com/chat';
   String cloudBaseUrl =
@@ -380,18 +378,30 @@ class VitaGuardState extends ChangeNotifier {
   String bleCharacteristicUuid = '-';
   DateTime? bleConnectedAt;
   DateTime? lastSensorUpdateAt;
+  String sensorStatus = 'No sensor data yet';
   String cloudStatus = 'Cloud sync disabled';
   String locationStatus = 'Location not requested';
+  String notificationStatus = 'Notification not requested';
   bool requestingLocation = false;
   double? latitude;
   double? longitude;
   int deviceBattery = 96;
   DateTime? privacyPolicyAcceptedAt;
+  String privacyPolicyVersion = '1.0';
+  final List<String> consentScopes = const [
+    'health_data',
+    'location',
+    'ble_device',
+    'cloud_sync',
+  ];
 
   String userName = '';
+  String emergencyContactName = '';
+  String emergencyContactPhone = '';
   double weight = 60;
   double height = 165;
   int age = 20;
+  DateTime? birthDate;
   String gender = 'Female';
   String conditions = 'None';
 
@@ -415,6 +425,7 @@ class VitaGuardState extends ChangeNotifier {
     alerts
       ..clear()
       ..addAll(await _alertStorage.loadAlerts());
+    await _initializeNotifications();
     _startMockLoop();
     _bleSubscription = _bleService.sensorStream.listen(updateSensorData);
     notifyListeners();
@@ -433,6 +444,7 @@ class VitaGuardState extends ChangeNotifier {
     required double newWeight,
     required double newHeight,
     required int newAge,
+    DateTime? newBirthDate,
     required String newGender,
     required String newConditions,
   }) async {
@@ -440,6 +452,7 @@ class VitaGuardState extends ChangeNotifier {
     weight = newWeight;
     height = newHeight;
     age = newAge;
+    birthDate = newBirthDate ?? birthDate;
     gender = newGender;
     conditions = newConditions.trim().isEmpty ? 'None' : newConditions.trim();
     privacyPolicyAcceptedAt =
@@ -454,14 +467,22 @@ class VitaGuardState extends ChangeNotifier {
     required double newWeight,
     required double newHeight,
     required int newAge,
+    DateTime? newBirthDate,
     required String newGender,
     required String newConditions,
+    String? newEmergencyContactName,
+    String? newEmergencyContactPhone,
   }) {
+    emergencyContactName =
+        newEmergencyContactName?.trim() ?? emergencyContactName;
+    emergencyContactPhone =
+        newEmergencyContactPhone?.trim() ?? emergencyContactPhone;
     return completeSetup(
       newName: userName,
       newWeight: newWeight,
       newHeight: newHeight,
       newAge: newAge,
+      newBirthDate: newBirthDate,
       newGender: newGender,
       newConditions: newConditions,
     );
@@ -476,6 +497,7 @@ class VitaGuardState extends ChangeNotifier {
   Future<void> updateSensorData(SensorData data) async {
     currentSensor = data;
     lastSensorUpdateAt = DateTime.now();
+    sensorStatus = _sensorStatusFor(data);
     deviceBattery = (96 - sensorHistory.length ~/ 4).clamp(18, 96).toInt();
     currentRisk = _riskAnalyzer.analyze(data, sensorHistory);
     sensorHistory.add(data);
@@ -497,6 +519,7 @@ class VitaGuardState extends ChangeNotifier {
         );
         alerts.insert(0, alert);
         await _alertStorage.saveAlerts(alerts);
+        _showAlertNotification(alert);
         _syncAlertToCloud(alert);
       }
     }
@@ -562,17 +585,76 @@ class VitaGuardState extends ChangeNotifier {
   }
 
   Map<String, dynamic> get userProfile => {
+        'userId': userId,
         'deviceId': deviceId,
         'name': userName,
         'age': age,
+        'birthDate': birthDate?.toIso8601String(),
         'weight': weight,
         'height': height,
         'gender': gender,
         'conditions': conditions,
+        'emergencyContactName': emergencyContactName,
+        'emergencyContactPhone': emergencyContactPhone,
         'latitude': latitude,
         'longitude': longitude,
         'privacyPolicyAcceptedAt': privacyPolicyAcceptedAt?.toIso8601String(),
+        'privacyPolicyVersion': privacyPolicyVersion,
+        'consentScopes': consentScopes,
       };
+
+  String get sensorFreshnessStatus {
+    final last = lastSensorUpdateAt;
+    if (last == null) return 'No sensor data yet';
+    final age = DateTime.now().difference(last);
+    if (age.inSeconds <= 8) return 'Receiving data';
+    if (age.inSeconds <= 30) return 'Sensor data delayed';
+    return 'Sensor data stale';
+  }
+
+  String exportSensorHistoryCsv() {
+    final buffer = StringBuffer();
+    buffer.writeln(
+      'timestamp,user_id,device_id,heart_rate,spo2,ecg_rate,ecg_rr_interval,ecg_hrv,gsr,temperature,accel_x,accel_y,accel_z,gyro_x,gyro_y,gyro_z,motion_magnitude,gyro_magnitude,risk_class,alert_level',
+    );
+    for (final sample in sensorRiskHistory) {
+      final sensor = sample.sensorData;
+      final risk = sample.riskResult;
+      buffer.writeln([
+        sensor.timestamp.toIso8601String(),
+        userId,
+        deviceId,
+        sensor.heartRate,
+        sensor.spo2,
+        sensor.ecgRate,
+        sensor.ecgRrInterval,
+        sensor.ecgHrv,
+        sensor.gsr,
+        sensor.temperature,
+        sensor.accelX,
+        sensor.accelY,
+        sensor.accelZ,
+        sensor.gyroX,
+        sensor.gyroY,
+        sensor.gyroZ,
+        sensor.motionMagnitude,
+        sensor.gyroMagnitude,
+        risk.riskClass,
+        risk.alertLevel,
+      ].map(_csvCell).join(','));
+    }
+    return buffer.toString();
+  }
+
+  String _sensorStatusFor(SensorData data) {
+    final invalid = data.heartRate < 0 ||
+        data.spo2 < 0 ||
+        data.spo2 > 100 ||
+        data.temperature < 20 ||
+        data.temperature > 45;
+    if (invalid) return 'Invalid sensor value received';
+    return bleConnected ? 'Receiving BLE sensor data' : 'Receiving mock data';
+  }
 
   Future<void> _syncSensorToCloud(
       SensorData data, RiskResult riskResult) async {
@@ -591,6 +673,7 @@ class VitaGuardState extends ChangeNotifier {
       userProfile: userProfile,
       battery: deviceBattery,
       bleStatus: bleStatus,
+      sensorStatus: sensorStatus,
     );
     cloudStatus = ok
         ? 'Cloud synced ${DateTime.now().toLocal().toIso8601String().substring(11, 19)}'
@@ -616,6 +699,39 @@ class VitaGuardState extends ChangeNotifier {
     cloudStatus = ok ? 'Alert synced to cloud' : 'Cloud alert sync failed';
     _alertCloudSyncInFlight = false;
     notifyListeners();
+  }
+
+  Future<void> _initializeNotifications() async {
+    try {
+      final ok = await _notificationService.initialize();
+      notificationStatus =
+          ok ? 'Notifications ready' : 'Notification permission denied';
+    } catch (error) {
+      notificationStatus = 'Notification unavailable: $error';
+    }
+  }
+
+  Future<void> requestNotifications() async {
+    try {
+      final ok = await _notificationService.requestPermission();
+      notificationStatus =
+          ok ? 'Notifications ready' : 'Notification permission denied';
+    } catch (error) {
+      notificationStatus = 'Notification unavailable: $error';
+    }
+    await _saveSettings();
+    notifyListeners();
+  }
+
+  Future<void> _showAlertNotification(AlertRecord alert) async {
+    await _notificationService.showRiskAlert(
+      riskResult: alert.riskResult,
+      heartRate: alert.sensorData.heartRate,
+      spo2: alert.sensorData.spo2,
+    );
+    notificationStatus = _notificationService.permissionGranted
+        ? 'Last notification sent'
+        : 'Notification permission denied';
   }
 
   Future<bool> findDeviceForSetup() async {
@@ -703,6 +819,23 @@ class VitaGuardState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> forgetDevice() async {
+    await _bleService.disconnect();
+    bleConnected = false;
+    bleConnectedAt = null;
+    bleDeviceName = 'No device selected';
+    bleDeviceId = '-';
+    bleServiceUuid = _bleService.configuredServiceUuid.isEmpty
+        ? 'Auto-detect'
+        : _bleService.configuredServiceUuid;
+    bleCharacteristicUuid = _bleService.configuredCharacteristicUuid.isEmpty
+        ? 'Auto notify/indicate characteristic'
+        : _bleService.configuredCharacteristicUuid;
+    bleStatus = 'Device forgotten. Mock BLE stream connected';
+    await _saveSettings();
+    notifyListeners();
+  }
+
   Future<bool> updateLocation() async {
     requestingLocation = true;
     locationStatus = 'Requesting location...';
@@ -730,6 +863,11 @@ class VitaGuardState extends ChangeNotifier {
     const configuredCloudBaseUrl =
         String.fromEnvironment('VITAGAURD_CLOUD_BASE_URL');
     setupDone = prefs.getBool('setupDone') ?? setupDone;
+    userId = prefs.getString('userId') ?? userId;
+    if (userId.isEmpty) {
+      userId = 'user-${DateTime.now().microsecondsSinceEpoch}';
+      await prefs.setString('userId', userId);
+    }
     deviceId = prefs.getString('deviceId') ?? deviceId;
     if (deviceId.isEmpty) {
       deviceId = 'device-${DateTime.now().microsecondsSinceEpoch}';
@@ -758,13 +896,20 @@ class VitaGuardState extends ChangeNotifier {
     final lastSensorAtRaw = prefs.getString('lastSensorUpdateAt');
     lastSensorUpdateAt =
         lastSensorAtRaw == null ? null : DateTime.tryParse(lastSensorAtRaw);
+    sensorStatus = prefs.getString('sensorStatus') ?? sensorStatus;
     userName = prefs.getString('userName') ?? userName;
+    emergencyContactName =
+        prefs.getString('emergencyContactName') ?? emergencyContactName;
+    emergencyContactPhone =
+        prefs.getString('emergencyContactPhone') ?? emergencyContactPhone;
     final acceptedAtRaw = prefs.getString('privacyPolicyAcceptedAt');
     privacyPolicyAcceptedAt =
         acceptedAtRaw == null ? null : DateTime.tryParse(acceptedAtRaw);
     weight = prefs.getDouble('weight') ?? weight;
     height = prefs.getDouble('height') ?? height;
     age = prefs.getInt('age') ?? age;
+    final birthDateRaw = prefs.getString('birthDate');
+    birthDate = birthDateRaw == null ? null : DateTime.tryParse(birthDateRaw);
     gender = prefs.getString('gender') ?? gender;
     conditions = prefs.getString('conditions') ?? conditions;
     latitude = prefs.getDouble('latitude');
@@ -778,6 +923,7 @@ class VitaGuardState extends ChangeNotifier {
   Future<void> _saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('setupDone', setupDone);
+    await prefs.setString('userId', userId);
     await prefs.setString('deviceId', deviceId);
     await prefs.setString('phratumaEndpoint', phratumaEndpoint);
     await prefs.setString('cloudBaseUrl', cloudBaseUrl);
@@ -802,10 +948,19 @@ class VitaGuardState extends ChangeNotifier {
     } else {
       await prefs.remove('lastSensorUpdateAt');
     }
+    await prefs.setString('sensorStatus', sensorStatus);
     await prefs.setString('userName', userName);
+    await prefs.setString('emergencyContactName', emergencyContactName);
+    await prefs.setString('emergencyContactPhone', emergencyContactPhone);
     await prefs.setDouble('weight', weight);
     await prefs.setDouble('height', height);
     await prefs.setInt('age', age);
+    final currentBirthDate = birthDate;
+    if (currentBirthDate != null) {
+      await prefs.setString('birthDate', currentBirthDate.toIso8601String());
+    } else {
+      await prefs.remove('birthDate');
+    }
     await prefs.setString('gender', gender);
     await prefs.setString('conditions', conditions);
     final acceptedAt = privacyPolicyAcceptedAt;
@@ -832,4 +987,12 @@ class VitaGuardState extends ChangeNotifier {
     _bleService.dispose();
     super.dispose();
   }
+}
+
+String _csvCell(Object? value) {
+  final text = (value ?? '').toString();
+  if (!text.contains(',') && !text.contains('"') && !text.contains('\n')) {
+    return text;
+  }
+  return '"${text.replaceAll('"', '""')}"';
 }

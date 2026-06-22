@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../legal/privacy_policy.dart';
@@ -14,22 +15,32 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late final TextEditingController _weightController;
   late final TextEditingController _heightController;
-  late final TextEditingController _ageController;
+  late final TextEditingController _birthDateController;
   late final TextEditingController _conditionsController;
+  late final TextEditingController _emergencyNameController;
+  late final TextEditingController _emergencyPhoneController;
   late String _gender;
   late String _language;
+  late DateTime _birthDate;
   bool _deviceFound = false;
+  bool _editingPersonalInfo = false;
 
   @override
   void initState() {
     super.initState();
-    final state = context.read<VitaGuardState>();
+    final state = context.read<DzozState>();
     _weightController =
         TextEditingController(text: state.weight.toStringAsFixed(0));
     _heightController =
         TextEditingController(text: state.height.toStringAsFixed(0));
-    _ageController = TextEditingController(text: state.age.toString());
+    _birthDate = state.birthDate ?? _birthDateFromAge(state.age);
+    _birthDateController =
+        TextEditingController(text: _formatBirthDate(_birthDate));
     _conditionsController = TextEditingController(text: state.conditions);
+    _emergencyNameController =
+        TextEditingController(text: state.emergencyContactName);
+    _emergencyPhoneController =
+        TextEditingController(text: state.emergencyContactPhone);
     _gender = state.gender;
     _language = state.language;
   }
@@ -38,14 +49,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void dispose() {
     _weightController.dispose();
     _heightController.dispose();
-    _ageController.dispose();
+    _birthDateController.dispose();
     _conditionsController.dispose();
+    _emergencyNameController.dispose();
+    _emergencyPhoneController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<VitaGuardState>();
+    final state = context.watch<DzozState>();
     final compact = MediaQuery.sizeOf(context).width < 600;
 
     return ListView(
@@ -55,36 +68,83 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 14),
         _Section(
           title: 'Personal information',
-          child: Wrap(
-            spacing: 10,
-            runSpacing: 10,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ProfileTile(
-                icon: Icons.monitor_weight_outlined,
-                label: 'Weight',
-                value: '${state.weight.toStringAsFixed(0)} kg',
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _ProfileTile(
+                    icon: Icons.monitor_weight_outlined,
+                    label: 'Weight',
+                    value: '${state.weight.toStringAsFixed(0)} kg',
+                  ),
+                  _ProfileTile(
+                    icon: Icons.height_outlined,
+                    label: 'Height',
+                    value: '${state.height.toStringAsFixed(0)} cm',
+                  ),
+                  _ProfileTile(
+                    icon: Icons.cake_outlined,
+                    label: 'Birth date',
+                    value: _formatBirthDate(
+                      state.birthDate ?? _birthDateFromAge(state.age),
+                    ),
+                  ),
+                  _ProfileTile(
+                    icon: Icons.person_outline,
+                    label: 'Gender',
+                    value: state.gender,
+                  ),
+                  _ProfileTile(
+                    icon: Icons.contact_emergency_outlined,
+                    label: 'Emergency',
+                    value: state.emergencyContactPhone.isEmpty
+                        ? '-'
+                        : state.emergencyContactPhone,
+                  ),
+                  _ProfileTile(
+                    icon: Icons.medical_information_outlined,
+                    label: 'Conditions',
+                    value: state.conditions,
+                    wide: true,
+                  ),
+                ],
               ),
-              _ProfileTile(
-                icon: Icons.height_outlined,
-                label: 'Height',
-                value: '${state.height.toStringAsFixed(0)} cm',
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => setState(() {
+                    if (!_editingPersonalInfo) {
+                      _syncPersonalControllers(state);
+                    }
+                    _editingPersonalInfo = !_editingPersonalInfo;
+                  }),
+                  icon: Icon(
+                      _editingPersonalInfo ? Icons.close : Icons.edit_outlined),
+                  label: Text(_editingPersonalInfo
+                      ? 'Cancel editing'
+                      : 'Edit personal information'),
+                ),
               ),
-              _ProfileTile(
-                icon: Icons.cake_outlined,
-                label: 'Age',
-                value: '${state.age}',
-              ),
-              _ProfileTile(
-                icon: Icons.person_outline,
-                label: 'Gender',
-                value: state.gender,
-              ),
-              _ProfileTile(
-                icon: Icons.medical_information_outlined,
-                label: 'Conditions',
-                value: state.conditions,
-                wide: true,
-              ),
+              if (_editingPersonalInfo) ...[
+                const SizedBox(height: 12),
+                _PersonalInfoEditor(
+                  weightController: _weightController,
+                  heightController: _heightController,
+                  birthDateController: _birthDateController,
+                  conditionsController: _conditionsController,
+                  emergencyNameController: _emergencyNameController,
+                  emergencyPhoneController: _emergencyPhoneController,
+                  gender: _gender,
+                  onGenderChanged: (value) =>
+                      setState(() => _gender = value ?? _gender),
+                  onBirthDateTap: _selectBirthDate,
+                  onSave: () => _savePersonalInfo(state),
+                ),
+              ],
             ],
           ),
         ),
@@ -115,47 +175,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 },
               ),
               const SizedBox(height: 10),
-              _NumberField(controller: _weightController, label: 'Weight (kg)'),
-              const SizedBox(height: 10),
-              _NumberField(controller: _heightController, label: 'Height (cm)'),
-              const SizedBox(height: 10),
-              _NumberField(controller: _ageController, label: 'Age'),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                initialValue: _gender,
-                dropdownColor: const Color(0xFF11141B),
-                decoration: const InputDecoration(labelText: 'Gender'),
-                items: const ['Female', 'Male', 'Other']
-                    .map((item) =>
-                        DropdownMenuItem(value: item, child: Text(item)))
-                    .toList(),
-                onChanged: (value) =>
-                    setState(() => _gender = value ?? _gender),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _conditionsController,
-                minLines: 3,
-                maxLines: 5,
-                decoration: const InputDecoration(
-                  labelText: 'Underlying disease / medical conditions',
-                ),
-              ),
-              const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () => state.updatePersonalInfo(
-                    newWeight:
-                        double.tryParse(_weightController.text) ?? state.weight,
-                    newHeight:
-                        double.tryParse(_heightController.text) ?? state.height,
-                    newAge: int.tryParse(_ageController.text) ?? state.age,
-                    newGender: _gender,
-                    newConditions: _conditionsController.text,
-                  ),
-                  icon: const Icon(Icons.save_outlined),
-                  label: const Text('Save profile'),
+                child: OutlinedButton.icon(
+                  onPressed: () => _showExportDialog(context, state),
+                  icon: const Icon(Icons.file_download_outlined),
+                  label: const Text('Export sensor history CSV'),
                 ),
               ),
               const SizedBox(height: 10),
@@ -175,16 +200,191 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _findDevice() async {
-    final found = await context.read<VitaGuardState>().findDeviceForSetup();
+    final found = await context.read<DzozState>().findDeviceForSetup();
     if (!mounted) return;
     setState(() => _deviceFound = found);
+  }
+
+  void _syncPersonalControllers(DzozState state) {
+    _weightController.text = state.weight.toStringAsFixed(0);
+    _heightController.text = state.height.toStringAsFixed(0);
+    _birthDate = state.birthDate ?? _birthDateFromAge(state.age);
+    _birthDateController.text = _formatBirthDate(_birthDate);
+    _conditionsController.text = state.conditions;
+    _emergencyNameController.text = state.emergencyContactName;
+    _emergencyPhoneController.text = state.emergencyContactPhone;
+    _gender = state.gender;
+  }
+
+  Future<void> _savePersonalInfo(DzozState state) async {
+    await state.updatePersonalInfo(
+      newWeight: double.tryParse(_weightController.text) ?? state.weight,
+      newHeight: double.tryParse(_heightController.text) ?? state.height,
+      newAge: _ageFromBirthDate(_birthDate),
+      newBirthDate: _birthDate,
+      newGender: _gender,
+      newConditions: _conditionsController.text,
+      newEmergencyContactName: _emergencyNameController.text,
+      newEmergencyContactPhone: _emergencyPhoneController.text,
+    );
+    if (!mounted) return;
+    setState(() => _editingPersonalInfo = false);
+  }
+
+  Future<void> _selectBirthDate() async {
+    final now = DateTime.now();
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _birthDate,
+      firstDate: DateTime(now.year - 120),
+      lastDate: now,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Colors.white,
+              onPrimary: Colors.black,
+              surface: Color(0xFF11141B),
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (selected == null) return;
+    setState(() {
+      _birthDate = selected;
+      _birthDateController.text = _formatBirthDate(selected);
+    });
+  }
+
+  void _showExportDialog(BuildContext context, DzozState state) {
+    final csv = state.exportSensorHistoryCsv();
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sensor history CSV'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: SelectableText(csv),
+          ),
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: csv));
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('CSV copied')),
+              );
+            },
+            icon: const Icon(Icons.copy),
+            label: const Text('Copy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PersonalInfoEditor extends StatelessWidget {
+  const _PersonalInfoEditor({
+    required this.weightController,
+    required this.heightController,
+    required this.birthDateController,
+    required this.conditionsController,
+    required this.emergencyNameController,
+    required this.emergencyPhoneController,
+    required this.gender,
+    required this.onGenderChanged,
+    required this.onBirthDateTap,
+    required this.onSave,
+  });
+
+  final TextEditingController weightController;
+  final TextEditingController heightController;
+  final TextEditingController birthDateController;
+  final TextEditingController conditionsController;
+  final TextEditingController emergencyNameController;
+  final TextEditingController emergencyPhoneController;
+  final String gender;
+  final ValueChanged<String?> onGenderChanged;
+  final VoidCallback onBirthDateTap;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _NumberField(controller: weightController, label: 'Weight (kg)'),
+        const SizedBox(height: 10),
+        _NumberField(controller: heightController, label: 'Height (cm)'),
+        const SizedBox(height: 10),
+        TextField(
+          controller: birthDateController,
+          readOnly: true,
+          onTap: onBirthDateTap,
+          decoration: const InputDecoration(
+            labelText: 'Birth date',
+            suffixIcon: Icon(Icons.calendar_month_outlined),
+          ),
+        ),
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String>(
+          initialValue: gender,
+          dropdownColor: const Color(0xFF11141B),
+          decoration: const InputDecoration(labelText: 'Gender'),
+          items: const ['Female', 'Male', 'Other']
+              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .toList(),
+          onChanged: onGenderChanged,
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: conditionsController,
+          minLines: 3,
+          maxLines: 5,
+          decoration: const InputDecoration(
+            labelText: 'Underlying disease / medical conditions',
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: emergencyNameController,
+          decoration:
+              const InputDecoration(labelText: 'Emergency contact name'),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: emergencyPhoneController,
+          keyboardType: TextInputType.phone,
+          decoration:
+              const InputDecoration(labelText: 'Emergency contact phone'),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: onSave,
+            icon: const Icon(Icons.save_outlined),
+            label: const Text('Save personal information'),
+          ),
+        ),
+      ],
+    );
   }
 }
 
 class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader({required this.state});
 
-  final VitaGuardState state;
+  final DzozState state;
 
   @override
   Widget build(BuildContext context) {
@@ -225,6 +425,13 @@ class _ProfileHeader extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   'Device ID: ${state.deviceId}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Color(0xFFA7B0C0)),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'User ID: ${state.userId}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: Color(0xFFA7B0C0)),
@@ -287,44 +494,53 @@ class _DeviceSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<VitaGuardState>();
-    final canConnect = deviceFound && !state.bleConnected && !state.scanningBle;
+    final state = context.watch<DzozState>();
+    return _Section(
+      title: 'My Device',
+      child: _DeviceSummaryCard(
+        state: state,
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => _DeviceDetailScreen(
+              deviceFound: deviceFound,
+              onFind: onFind,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DeviceSummaryCard extends StatelessWidget {
+  const _DeviceSummaryCard({required this.state, required this.onTap});
+
+  final DzozState state;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
     final statusColor =
         state.bleConnected ? const Color(0xFF22C55E) : const Color(0xFFA7B0C0);
-    final bleStatusType = state.scanningBle
-        ? _StatusType.loading
-        : state.bleStatus.toLowerCase().contains('failed')
-            ? _StatusType.error
-            : state.bleConnected || deviceFound
-                ? _StatusType.success
-                : _StatusType.neutral;
-    final locationStatusType = state.requestingLocation
-        ? _StatusType.loading
-        : state.locationStatus.toLowerCase().contains('unavailable')
-            ? _StatusType.error
-            : state.latitude != null && state.longitude != null
-                ? _StatusType.success
-                : _StatusType.neutral;
-    final cloudStatusType = state.cloudStatus.toLowerCase().contains('syncing')
-        ? _StatusType.loading
-        : state.cloudStatus.toLowerCase().contains('failed')
-            ? _StatusType.error
-            : state.cloudEnabled
-                ? _StatusType.success
-                : _StatusType.neutral;
-
-    return _Section(
-      title: 'Device',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0B0D12),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFF232833)),
+          ),
+          child: Row(
             children: [
               Container(
                 width: 54,
                 height: 54,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0B0D12),
+                  color: const Color(0xFF11141B),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: state.bleConnected
@@ -351,138 +567,239 @@ class _DeviceSection extends StatelessWidget {
                           ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      state.bleStatus,
-                      style: TextStyle(color: statusColor),
-                    ),
+                    Text(state.bleStatus, style: TextStyle(color: statusColor)),
                     const SizedBox(height: 4),
                     Text(
-                      'Battery: ${state.deviceBattery}%',
-                      style: const TextStyle(color: Color(0xFFA7B0C0)),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      state.locationStatus,
+                      'Battery: ${state.deviceBattery}% • ${state.sensorFreshnessStatus}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: Color(0xFFA7B0C0)),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right, color: Color(0xFFA7B0C0)),
             ],
           ),
-          const SizedBox(height: 12),
-          _StatusBanner(
-            icon: Icons.bluetooth,
-            text: state.bleStatus,
-            type: bleStatusType,
-          ),
-          const SizedBox(height: 8),
-          _StatusBanner(
-            icon: Icons.location_on_outlined,
-            text: state.locationStatus,
-            type: locationStatusType,
-          ),
-          const SizedBox(height: 8),
-          _StatusBanner(
-            icon: Icons.cloud_sync_outlined,
-            text: state.cloudStatus,
-            type: cloudStatusType,
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _DeviceDetailTile(
-                  label: 'Device name', value: state.bleDeviceName),
-              _DeviceDetailTile(label: 'Device ID', value: state.bleDeviceId),
-              _DeviceDetailTile(
-                label: 'Service UUID',
-                value: state.bleServiceUuid,
-              ),
-              _DeviceDetailTile(
-                label: 'Characteristic UUID',
-                value: state.bleCharacteristicUuid,
-              ),
-              _DeviceDetailTile(
-                label: 'Connected at',
-                value: _formatDateTime(state.bleConnectedAt),
-              ),
-              _DeviceDetailTile(
-                label: 'Last sensor update',
-                value: _formatDateTime(state.lastSensorUpdateAt),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: state.scanningBle ? null : onFind,
-                  icon: const Icon(Icons.search),
-                  label: Text(
-                    state.scanningBle
-                        ? 'Scanning...'
-                        : deviceFound
-                            ? 'Device found'
-                            : 'Find device',
-                  ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DeviceDetailScreen extends StatelessWidget {
+  const _DeviceDetailScreen({
+    required this.deviceFound,
+    required this.onFind,
+  });
+
+  final bool deviceFound;
+  final VoidCallback onFind;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<DzozState>();
+    final canConnect = deviceFound && !state.bleConnected && !state.scanningBle;
+    final bleStatusType = state.scanningBle
+        ? _StatusType.loading
+        : state.bleStatus.toLowerCase().contains('failed')
+            ? _StatusType.error
+            : state.bleConnected || deviceFound
+                ? _StatusType.success
+                : _StatusType.neutral;
+    final locationStatusType = state.requestingLocation
+        ? _StatusType.loading
+        : state.locationStatus.toLowerCase().contains('unavailable')
+            ? _StatusType.error
+            : state.latitude != null && state.longitude != null
+                ? _StatusType.success
+                : _StatusType.neutral;
+    final cloudStatusType = state.cloudStatus.toLowerCase().contains('syncing')
+        ? _StatusType.loading
+        : state.cloudStatus.toLowerCase().contains('failed')
+            ? _StatusType.error
+            : state.cloudEnabled
+                ? _StatusType.success
+                : _StatusType.neutral;
+    final sensorStatusType =
+        state.sensorStatus.toLowerCase().contains('invalid') ||
+                state.sensorFreshnessStatus.toLowerCase().contains('stale')
+            ? _StatusType.error
+            : state.lastSensorUpdateAt != null
+                ? _StatusType.success
+                : _StatusType.neutral;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF050608),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: canConnect
-                      ? () =>
-                          context.read<VitaGuardState>().connectDeviceForSetup()
-                      : null,
-                  icon: const Icon(Icons.bluetooth_connected),
-                  label: Text(state.bleConnected ? 'Connected' : 'Connect'),
+                const SizedBox(width: 4),
+                Text(
+                  'My Device',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: TextButton.icon(
-                  onPressed: state.bleConnected
-                      ? () => context.read<VitaGuardState>().disconnectBle()
-                      : null,
-                  icon: const Icon(Icons.bluetooth_disabled),
-                  label: const Text('Disconnect'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextButton.icon(
-                  onPressed: state.bleConnected
-                      ? null
-                      : () => context.read<VitaGuardState>().disconnectBle(),
-                  icon: const Icon(Icons.sensors),
-                  label: const Text('Use mock BLE'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: state.requestingLocation
-                  ? null
-                  : () => context.read<VitaGuardState>().updateLocation(),
-              icon: const Icon(Icons.location_on_outlined),
-              label: Text(
-                state.requestingLocation
-                    ? 'Requesting location...'
-                    : 'Allow location access',
+              ],
+            ),
+            const SizedBox(height: 12),
+            _StatusBanner(
+              icon: Icons.bluetooth,
+              text: state.bleStatus,
+              type: bleStatusType,
+            ),
+            const SizedBox(height: 8),
+            _StatusBanner(
+              icon: Icons.location_on_outlined,
+              text: state.locationStatus,
+              type: locationStatusType,
+            ),
+            const SizedBox(height: 8),
+            _StatusBanner(
+              icon: Icons.cloud_sync_outlined,
+              text: state.cloudStatus,
+              type: cloudStatusType,
+            ),
+            const SizedBox(height: 8),
+            _StatusBanner(
+              icon: Icons.sensors,
+              text: '${state.sensorStatus} • ${state.sensorFreshnessStatus}',
+              type: sensorStatusType,
+            ),
+            const SizedBox(height: 8),
+            _StatusBanner(
+              icon: Icons.notifications_active_outlined,
+              text: state.notificationStatus,
+              type: _StatusType.neutral,
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () =>
+                    context.read<DzozState>().requestNotifications(),
+                icon: const Icon(Icons.notifications_active_outlined),
+                label: const Text('Enable notifications'),
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _DeviceDetailTile(
+                    label: 'Device name', value: state.bleDeviceName),
+                _DeviceDetailTile(label: 'Device ID', value: state.bleDeviceId),
+                _DeviceDetailTile(
+                  label: 'Service UUID',
+                  value: state.bleServiceUuid,
+                ),
+                _DeviceDetailTile(
+                  label: 'Characteristic UUID',
+                  value: state.bleCharacteristicUuid,
+                ),
+                _DeviceDetailTile(
+                  label: 'Connected at',
+                  value: _formatDateTime(state.bleConnectedAt),
+                ),
+                _DeviceDetailTile(
+                  label: 'Last sensor update',
+                  value: _formatDateTime(state.lastSensorUpdateAt),
+                ),
+                const _DeviceDetailTile(
+                  label: 'Firmware',
+                  value: 'Not reported',
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: state.scanningBle ? null : onFind,
+                    icon: const Icon(Icons.search),
+                    label: Text(
+                      state.scanningBle
+                          ? 'Scanning...'
+                          : deviceFound
+                              ? 'Device found'
+                              : 'Find device',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: canConnect
+                        ? () =>
+                            context.read<DzozState>().connectDeviceForSetup()
+                        : null,
+                    icon: const Icon(Icons.bluetooth_connected),
+                    label: Text(state.bleConnected ? 'Connected' : 'Connect'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: state.bleConnected
+                        ? () => context.read<DzozState>().disconnectBle()
+                        : null,
+                    icon: const Icon(Icons.bluetooth_disabled),
+                    label: const Text('Disconnect'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: state.bleConnected
+                        ? null
+                        : () => context.read<DzozState>().disconnectBle(),
+                    icon: const Icon(Icons.sensors),
+                    label: const Text('Use mock BLE'),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton.icon(
+                onPressed: () => context.read<DzozState>().forgetDevice(),
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Forget device'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: state.requestingLocation
+                    ? null
+                    : () => context.read<DzozState>().updateLocation(),
+                icon: const Icon(Icons.location_on_outlined),
+                label: Text(
+                  state.requestingLocation
+                      ? 'Requesting location...'
+                      : 'Allow location access',
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -491,7 +808,7 @@ class _DeviceSection extends StatelessWidget {
 class _PrivacySection extends StatelessWidget {
   const _PrivacySection({required this.state});
 
-  final VitaGuardState state;
+  final DzozState state;
 
   @override
   Widget build(BuildContext context) {
@@ -504,10 +821,15 @@ class _PrivacySection extends StatelessWidget {
             icon: Icons.verified_user_outlined,
             text: state.privacyPolicyAcceptedAt == null
                 ? 'Consent has not been recorded.'
-                : 'Consent accepted at ${_formatDateTime(state.privacyPolicyAcceptedAt)}',
+                : 'Consent accepted at ${_formatDateTime(state.privacyPolicyAcceptedAt)} • Version ${state.privacyPolicyVersion}',
             type: state.privacyPolicyAcceptedAt == null
                 ? _StatusType.neutral
                 : _StatusType.success,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Consent scopes: ${state.consentScopes.join(', ')}',
+            style: const TextStyle(color: Color(0xFFA7B0C0)),
           ),
           const SizedBox(height: 10),
           SizedBox(
@@ -633,6 +955,27 @@ String _formatDateTime(DateTime? value) {
   final hour = local.hour.toString().padLeft(2, '0');
   final minute = local.minute.toString().padLeft(2, '0');
   return '$year-$month-$day $hour:$minute';
+}
+
+DateTime _birthDateFromAge(int age) {
+  final now = DateTime.now();
+  return DateTime(now.year - age, now.month, now.day);
+}
+
+int _ageFromBirthDate(DateTime birthDate) {
+  final now = DateTime.now();
+  var age = now.year - birthDate.year;
+  final hasNotHadBirthdayThisYear = now.month < birthDate.month ||
+      (now.month == birthDate.month && now.day < birthDate.day);
+  if (hasNotHadBirthdayThisYear) age -= 1;
+  return age.clamp(0, 120);
+}
+
+String _formatBirthDate(DateTime date) {
+  final year = date.year.toString().padLeft(4, '0');
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '$year-$month-$day';
 }
 
 class _ProfileTile extends StatelessWidget {

@@ -1,4 +1,4 @@
-package com.example.vitaguard
+package com.example.dzoz
 
 import io.flutter.embedding.android.FlutterActivity
 

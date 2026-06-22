@@ -33,9 +33,9 @@ Future<bool> showPrivacyPolicyDialog(BuildContext context) async {
 }
 
 const privacyPolicyText = '''
-Vita gaurd
+Dzoz
 ปรับปรุงล่าสุด: [21/06/69] เวอร์ชัน: 1.0
-Vita gaurd ให้ความสำคัญกับความเป็นส่วนตัวและความปลอดภัยของข้อมูลผู้ใช้งาน นโยบายฉบับนี้จัดทำขึ้นให้สอดคล้องกับพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562 (PDPA) และอธิบายถึงการเก็บรวบรวม ใช้ เปิดเผย
+Dzoz ให้ความสำคัญกับความเป็นส่วนตัวและความปลอดภัยของข้อมูลผู้ใช้งาน นโยบายฉบับนี้จัดทำขึ้นให้สอดคล้องกับพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562 (PDPA) และอธิบายถึงการเก็บรวบรวม ใช้ เปิดเผย
 นโยบายส่วนบุคคล
 
 1. ข้อมูลที่มีการเก็บรวบรวม
@@ -59,7 +59,7 @@ Vita gaurd ให้ความสำคัญกับความเป็น
 เราจะเก็บรักษาข้อมูลส่วนบุคคลไว้ตราบเท่าที่จำเป็นต่อวัตถุประสงค์ที่ระบุไว้ในนโยบายนี้ หรือไม่เกิน [ระบุระยะเวลา เช่น 24 เดือนหลังบัญชีไม่มีการใช้งาน] นับแต่วันที่เก็บรวบรวม เว้นแต่กฎหมายกำหนดให้เก็บไว้นานกว่านั้น เมื่อพ้นระยะเวลาดังกล่าว ข้อมูลจะถูกลบหรือทำให้ไม่สามารถระบุตัวตนได้
 
 4. การเปิดเผยข้อมูล
-Vita gaurd จะไม่เปิดเผยข้อมูลส่วนบุคคลแก่บุคคลภายนอก เว้นแต่
+Dzoz จะไม่เปิดเผยข้อมูลส่วนบุคคลแก่บุคคลภายนอก เว้นแต่
     • ได้รับความยินยอมจากผู้ใช้งาน
     • เป็นไปตามข้อกำหนดของกฎหมายหรือคำสั่งของหน่วยงานรัฐที่มีอำนาจ
     • เป็นข้อมูลที่ผ่านการลบข้อมูลระบุตัวตนแล้วและใช้เพื่อการศึกษา วิจัย หรือพัฒนาระบบ
@@ -86,7 +86,7 @@ Vita gaurd จะไม่เปิดเผยข้อมูลส่วนบ
 หากผู้ใช้งานมีอายุต่ำกว่า 20 ปีบริบูรณ์ หรืออายุต่ำกว่าเกณฑ์ที่กฎหมายกำหนดให้ต้องได้รับความยินยอมจากผู้ใช้อำนาจปกครอง การให้ความยินยอมเก็บรวบรวมและใช้ข้อมูลส่วนบุคคลจะต้องได้รับความยินยอมจากผู้ใช้อำนาจปกครองก่อนการใช้งานระบบ
 
 8. ข้อจำกัดความรับผิดชอบ
-Vita gaurd เป็นระบบสำหรับประเมินความเสี่ยงด้านสุขภาพเบื้องต้นเท่านั้น ไม่ใช่เครื่องมือแพทย์และไม่ใช้สำหรับการวินิจฉัยโรค ผลลัพธ์ที่แสดงเป็นเพียงข้อมูลประกอบการตัดสินใจ ไม่สามารถใช้แทนคำแนะนำ การตรวจรักษา หรือการวินิจฉัยจากแพทย์หรือบุคลากรทางการแพทย์ได้ หากพบความผิดปกติร้ายแรงหรือเป็นเหตุฉุกเฉิน โปรดติดต่อสถานพยาบาลหรือสายด่วนการแพทย์ฉุกเฉิน 1669 ทันที
+Dzoz เป็นระบบสำหรับประเมินความเสี่ยงด้านสุขภาพเบื้องต้นเท่านั้น ไม่ใช่เครื่องมือแพทย์และไม่ใช้สำหรับการวินิจฉัยโรค ผลลัพธ์ที่แสดงเป็นเพียงข้อมูลประกอบการตัดสินใจ ไม่สามารถใช้แทนคำแนะนำ การตรวจรักษา หรือการวินิจฉัยจากแพทย์หรือบุคลากรทางการแพทย์ได้ หากพบความผิดปกติร้ายแรงหรือเป็นเหตุฉุกเฉิน โปรดติดต่อสถานพยาบาลหรือสายด่วนการแพทย์ฉุกเฉิน 1669 ทันที
 
 9. การร้องเรียน
 หากผู้ใช้งานเห็นว่าเราไม่ปฏิบัติตามนโยบายนี้หรือกฎหมายคุ้มครองข้อมูลส่วนบุคคล สามารถร้องเรียนมายังเราตามช่องทางที่ระบุไว้ข้างต้น หรือร้องเรียนต่อสำนักงานคณะกรรมการคุ้มครองข้อมูลส่วนบุคคล (สคส.) ได้โดยตรง
@@ -94,11 +94,11 @@ Vita gaurd เป็นระบบสำหรับประเมินคว
 10. การเปลี่ยนแปลงนโยบาย
 ผู้พัฒนาขอสงวนสิทธิ์ในการปรับปรุงหรือแก้ไขนโยบายความเป็นส่วนตัวฉบับนี้ตามความเหมาะสม โดยจะแจ้งให้ผู้ใช้งานทราบเมื่อมีการเปลี่ยนแปลงที่สำคัญผ่านช่องทาง [ระบุช่องทาง เช่น ในแอปพลิเคชันหรืออีเมล]
 
-การใช้งานระบบ Vita gaurd ถือว่าผู้ใช้งานได้อ่าน เข้าใจ และยอมรับนโยบายความเป็นส่วนตัวฉบับนี้แล้ว
+การใช้งานระบบ Dzoz ถือว่าผู้ใช้งานได้อ่าน เข้าใจ และยอมรับนโยบายความเป็นส่วนตัวฉบับนี้แล้ว
 
-Vita gaurd
+Dzoz
 Last Updated: [21/06/2026] Version: 1.0
-Vita gaurd is committed to protecting the privacy and security of our users' data. This Privacy Policy is drafted in alignment with Thailand's Personal Data Protection Act B.E. 2562 (2019) (PDPA) and explains how we collect, use, disclose, and protect personal data.
+Dzoz is committed to protecting the privacy and security of our users' data. This Privacy Policy is drafted in alignment with Thailand's Personal Data Protection Act B.E. 2562 (2019) (PDPA) and explains how we collect, use, disclose, and protect personal data.
 
 1. Information We Collect
 We collect the following categories of data:
@@ -121,7 +121,7 @@ System security and misuse prevention    Legitimate interest of the data control
 We retain personal data only for as long as necessary to fulfill the purposes described in this policy, or for no more than [specify period, e.g., 24 months after account inactivity], unless a longer retention period is required by law. After this period, data will be deleted or rendered unidentifiable.
 
 4. Disclosure of Information
-Vita gaurd will not disclose personal data to third parties except:
+Dzoz will not disclose personal data to third parties except:
     • With the user's consent
     • As required by law or a lawful order from a competent authority
     • Where data has been de-identified and is used for education, research, or system development
@@ -148,7 +148,7 @@ You may exercise these rights by contacting us through the channels listed at th
 If a user is under 20 years of age, or under the age threshold requiring parental/guardian consent under applicable law, consent for the collection and use of personal data must be obtained from a parent or legal guardian before using the system.
 
 8. Disclaimer
-Vita gaurd is intended for preliminary health risk assessment only. It is not a medical device and is not intended for disease diagnosis. The results provided are for informational purposes only and do not replace advice, examination, or diagnosis from a physician or qualified healthcare professional. If you notice a serious abnormality or experience a medical emergency, please contact a healthcare facility or emergency medical services (1669 in Thailand) immediately.
+Dzoz is intended for preliminary health risk assessment only. It is not a medical device and is not intended for disease diagnosis. The results provided are for informational purposes only and do not replace advice, examination, or diagnosis from a physician or qualified healthcare professional. If you notice a serious abnormality or experience a medical emergency, please contact a healthcare facility or emergency medical services (1669 in Thailand) immediately.
 
 9. Complaints
 If you believe we have failed to comply with this policy or applicable data protection law, you may file a complaint with us through the contact channels above, or directly with Thailand's Personal Data Protection Committee (PDPC).
@@ -156,5 +156,5 @@ If you believe we have failed to comply with this policy or applicable data prot
 10. Changes to This Policy
 We reserve the right to update or amend this Privacy Policy as appropriate. Users will be notified of material changes through [specify channel, e.g., in-app notification or email].
 
-By using Vita gaurd, you acknowledge that you have read, understood, and agreed to this Privacy Policy.
+By using Dzoz, you acknowledge that you have read, understood, and agreed to this Privacy Policy.
 ''';

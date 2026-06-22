@@ -1,6 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Foreground location access -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -16,7 +17,7 @@
 
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
     <application
-        android:label="Vita gaurd"
+        android:label="Dzoz"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

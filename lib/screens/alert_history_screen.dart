@@ -13,7 +13,7 @@ class AlertHistoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<VitaGuardState>();
+    final state = context.watch<DzozState>();
     final alerts = state.alerts;
 
     return ListView(
@@ -62,7 +62,7 @@ class AlertHistoryScreen extends StatelessWidget {
 class _AlertTrend extends StatelessWidget {
   const _AlertTrend({required this.state});
 
-  final VitaGuardState state;
+  final DzozState state;
 
   @override
   Widget build(BuildContext context) {
@@ -178,7 +178,7 @@ class _AlertCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final alert = context
-        .watch<VitaGuardState>()
+        .watch<DzozState>()
         .alerts
         .firstWhere((item) => item.id == alertId);
     return Container(
@@ -229,8 +229,7 @@ class _ResponseButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return OutlinedButton(
-      onPressed: () =>
-          context.read<VitaGuardState>().respondToLatestAlert(label),
+      onPressed: () => context.read<DzozState>().respondToLatestAlert(label),
       child: Text(label),
     );
   }

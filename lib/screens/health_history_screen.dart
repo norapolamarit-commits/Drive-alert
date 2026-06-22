@@ -5,15 +5,26 @@ import 'package:provider/provider.dart';
 import '../main.dart';
 import '../models/sensor_risk_sample.dart';
 
-class HealthHistoryScreen extends StatefulWidget {
+class HealthHistoryScreen extends StatelessWidget {
   const HealthHistoryScreen({super.key});
 
   @override
-  State<HealthHistoryScreen> createState() => _HealthHistoryScreenState();
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: const [HealthHistorySection()],
+    );
+  }
 }
 
-class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
-  String _period = 'Week';
+class HealthHistorySection extends StatefulWidget {
+  const HealthHistorySection({super.key});
+
+  @override
+  State<HealthHistorySection> createState() => _HealthHistorySectionState();
+}
+
+class _HealthHistorySectionState extends State<HealthHistorySection> {
   String _selectedMetricId = 'heartRate';
 
   static const _metrics = [
@@ -30,10 +41,88 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
       icon: Icons.air,
     ),
     _HistoryMetric(
+      id: 'ecgRate',
+      title: 'Average ECG Rate',
+      unit: 'BPM',
+      icon: Icons.monitor_heart,
+    ),
+    _HistoryMetric(
+      id: 'ecgRrInterval',
+      title: 'Average ECG RR',
+      unit: 'ms',
+      icon: Icons.timeline,
+    ),
+    _HistoryMetric(
+      id: 'ecgHrv',
+      title: 'Average ECG HRV',
+      unit: 'ms',
+      icon: Icons.show_chart,
+    ),
+    _HistoryMetric(
+      id: 'gsr',
+      title: 'Average GSR',
+      unit: '',
+      icon: Icons.sensors,
+    ),
+    _HistoryMetric(
+      id: 'temperature',
+      title: 'Average Temperature',
+      unit: '°C',
+      icon: Icons.thermostat,
+    ),
+    _HistoryMetric(
       id: 'stress',
       title: 'Average Stress',
       unit: '',
       icon: Icons.bolt,
+    ),
+    _HistoryMetric(
+      id: 'accelX',
+      title: 'Average Accel X',
+      unit: 'g',
+      icon: Icons.swap_horiz,
+    ),
+    _HistoryMetric(
+      id: 'accelY',
+      title: 'Average Accel Y',
+      unit: 'g',
+      icon: Icons.swap_vert,
+    ),
+    _HistoryMetric(
+      id: 'accelZ',
+      title: 'Average Accel Z',
+      unit: 'g',
+      icon: Icons.open_in_full,
+    ),
+    _HistoryMetric(
+      id: 'gyroX',
+      title: 'Average Gyro X',
+      unit: 'dps',
+      icon: Icons.screen_rotation_alt,
+    ),
+    _HistoryMetric(
+      id: 'gyroY',
+      title: 'Average Gyro Y',
+      unit: 'dps',
+      icon: Icons.screen_rotation,
+    ),
+    _HistoryMetric(
+      id: 'gyroZ',
+      title: 'Average Gyro Z',
+      unit: 'dps',
+      icon: Icons.rotate_90_degrees_ccw,
+    ),
+    _HistoryMetric(
+      id: 'motionMagnitude',
+      title: 'Average Motion',
+      unit: 'g',
+      icon: Icons.directions_run,
+    ),
+    _HistoryMetric(
+      id: 'gyroMagnitude',
+      title: 'Average Gyro Magnitude',
+      unit: 'dps',
+      icon: Icons.threesixty,
     ),
     _HistoryMetric(
       id: 'alerts',
@@ -45,7 +134,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<VitaGuardState>();
+    final state = context.watch<DzozState>();
     final allSamples = state.sensorRiskHistory.isEmpty
         ? [
             SensorRiskSample(
@@ -54,24 +143,12 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
             ),
           ]
         : state.sensorRiskHistory;
-    final cutoff = DateTime.now().subtract(
-      _period == 'Month' ? const Duration(days: 30) : const Duration(days: 7),
-    );
-    final filteredSamples = allSamples
-        .where((item) => item.sensorData.timestamp.isAfter(cutoff))
-        .toList();
-    final samples = _takeLast(
-      filteredSamples.isEmpty ? allSamples : filteredSamples,
-      120,
-    );
+    final samples = _takeLast(allSamples, 120);
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Header(
-          period: _period,
-          onChanged: (value) => setState(() => _period = value),
-        ),
+        const _Header(),
         const SizedBox(height: 16),
         GridView.count(
           crossAxisCount: 2,
@@ -127,33 +204,16 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.period, required this.onChanged});
-
-  final String period;
-  final ValueChanged<String> onChanged;
+  const _Header();
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            'Health History',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                ),
+    return Text(
+      'Health History',
+      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
           ),
-        ),
-        SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(value: 'Week', label: Text('Week')),
-            ButtonSegment(value: 'Month', label: Text('Month')),
-          ],
-          selected: {period},
-          onSelectionChanged: (value) => onChanged(value.first),
-        ),
-      ],
     );
   }
 }
@@ -501,7 +561,7 @@ class _HistoryDetailScreenState extends State<_HistoryDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<VitaGuardState>();
+    final state = context.watch<DzozState>();
     final samples = state.sensorRiskHistory.isEmpty
         ? [
             SensorRiskSample(
@@ -964,7 +1024,20 @@ double _metricValue(String metricId, SensorRiskSample sample) {
   return switch (metricId) {
     'heartRate' => sample.sensorData.heartRate.toDouble(),
     'spo2' => sample.sensorData.spo2.toDouble(),
+    'ecgRate' => sample.sensorData.ecgRate.toDouble(),
+    'ecgRrInterval' => sample.sensorData.ecgRrInterval,
+    'ecgHrv' => sample.sensorData.ecgHrv,
+    'gsr' => sample.sensorData.gsr,
+    'temperature' => sample.sensorData.temperature,
     'stress' => sample.sensorData.stressLevel.toDouble(),
+    'accelX' => sample.sensorData.accelX,
+    'accelY' => sample.sensorData.accelY,
+    'accelZ' => sample.sensorData.accelZ,
+    'gyroX' => sample.sensorData.gyroX,
+    'gyroY' => sample.sensorData.gyroY,
+    'gyroZ' => sample.sensorData.gyroZ,
+    'motionMagnitude' => sample.sensorData.motionMagnitude,
+    'gyroMagnitude' => sample.sensorData.gyroMagnitude,
     'alerts' => sample.riskResult.levelValue.toDouble(),
     _ => 0,
   };

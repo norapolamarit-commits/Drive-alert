@@ -27,13 +27,13 @@ class _SetupScreenState extends State<SetupScreen> {
   @override
   void initState() {
     super.initState();
-    final state = context.read<VitaGuardState>();
+    final state = context.read<DzozState>();
     _nameController = TextEditingController(text: state.userName);
     _weightController =
         TextEditingController(text: state.weight.toStringAsFixed(0));
     _heightController =
         TextEditingController(text: state.height.toStringAsFixed(0));
-    final estimatedBirthDate = _birthDateFromAge(state.age);
+    final estimatedBirthDate = state.birthDate ?? _birthDateFromAge(state.age);
     _birthDate = estimatedBirthDate;
     _birthDateController =
         TextEditingController(text: _formatBirthDate(estimatedBirthDate));
@@ -129,12 +129,13 @@ class _SetupScreenState extends State<SetupScreen> {
     if (!_formKey.currentState!.validate()) return;
     final birthDate = _birthDate;
     if (birthDate == null) return;
-    context.read<VitaGuardState>().completeSetup(
+    context.read<DzozState>().completeSetup(
           newName: _nameController.text,
           newPrivacyPolicyAcceptedAt: _privacyAcceptedAt ?? DateTime.now(),
           newWeight: double.parse(_weightController.text),
           newHeight: double.parse(_heightController.text),
           newAge: _ageFromBirthDate(birthDate),
+          newBirthDate: birthDate,
           newGender: _gender,
           newConditions: _conditionsController.text,
         );
@@ -286,7 +287,7 @@ class _PrivacyPolicyAccept extends StatelessWidget {
                   ),
                 ),
                 const Text(
-                  ' and allow Vita gaurd to use my health, BLE, and location data for monitoring.',
+                  ' and allow Dzoz to use my health, BLE, and location data for monitoring.',
                   style: TextStyle(color: Colors.white, height: 1.35),
                 ),
               ],
@@ -332,7 +333,7 @@ class _SetupHero extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Vita gaurd',
+                  'Dzoz',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w900,
                         color: Colors.white,

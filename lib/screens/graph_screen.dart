@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../main.dart';
 import '../models/sensor_data.dart';
 import '../models/sensor_risk_sample.dart';
+import 'health_history_screen.dart';
 
 class GraphScreen extends StatefulWidget {
   const GraphScreen({super.key});
@@ -19,7 +20,7 @@ class _GraphScreenState extends State<GraphScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<VitaGuardState>();
+    final state = context.watch<DzozState>();
     final rawHistory = state.sensorHistory.isEmpty
         ? [state.currentSensor]
         : state.sensorHistory;
@@ -83,6 +84,10 @@ class _GraphScreenState extends State<GraphScreen> {
           const SizedBox(height: 12),
           _SensorTable(samples: sampleHistory),
         ],
+        const SizedBox(height: 18),
+        const Divider(color: Color(0xFF232833)),
+        const SizedBox(height: 10),
+        const HealthHistorySection(),
       ],
     );
   }

@@ -7,6 +7,9 @@ class SensorData {
     required this.spo2,
     required this.gsr,
     required this.temperature,
+    this.ecgRate = 0,
+    this.ecgRrInterval = 0,
+    this.ecgHrv = 0,
     required this.accelX,
     required this.accelY,
     required this.accelZ,
@@ -20,6 +23,9 @@ class SensorData {
   final int spo2;
   final double gsr;
   final double temperature;
+  final int ecgRate;
+  final double ecgRrInterval;
+  final double ecgHrv;
   final double accelX;
   final double accelY;
   final double accelZ;
@@ -38,16 +44,19 @@ class SensorData {
 
   factory SensorData.fromJson(Map<String, dynamic> json) {
     return SensorData(
-      heartRate: (json['heartRate'] as num?)?.round() ?? 0,
-      spo2: (json['spo2'] as num?)?.round() ?? 0,
-      gsr: (json['gsr'] as num?)?.toDouble() ?? 0,
-      temperature: (json['temperature'] as num?)?.toDouble() ?? 0,
-      accelX: (json['accelX'] as num?)?.toDouble() ?? 0,
-      accelY: (json['accelY'] as num?)?.toDouble() ?? 0,
-      accelZ: (json['accelZ'] as num?)?.toDouble() ?? 0,
-      gyroX: (json['gyroX'] as num?)?.toDouble() ?? 0,
-      gyroY: (json['gyroY'] as num?)?.toDouble() ?? 0,
-      gyroZ: (json['gyroZ'] as num?)?.toDouble() ?? 0,
+      heartRate: _num(json, 'heart_rate', 'heartRate').round(),
+      spo2: _num(json, 'spo2').round(),
+      gsr: _num(json, 'gsr'),
+      temperature: _num(json, 'temperature'),
+      ecgRate: _num(json, 'ecg_rate', 'ecgRate').round(),
+      ecgRrInterval: _num(json, 'ecg_rr_interval', 'ecgRrInterval'),
+      ecgHrv: _num(json, 'ecg_hrv', 'ecgHrv'),
+      accelX: _num(json, 'accel_x', 'accelX'),
+      accelY: _num(json, 'accel_y', 'accelY'),
+      accelZ: _num(json, 'accel_z', 'accelZ'),
+      gyroX: _num(json, 'gyro_x', 'gyroX'),
+      gyroY: _num(json, 'gyro_y', 'gyroY'),
+      gyroZ: _num(json, 'gyro_z', 'gyroZ'),
       timestamp: json['timestamp'] == null
           ? DateTime.now()
           : DateTime.tryParse(json['timestamp'].toString()) ?? DateTime.now(),
@@ -59,10 +68,25 @@ class SensorData {
   }
 
   Map<String, dynamic> toJson() => {
-        'heartRate': heartRate,
+        'heart_rate': heartRate,
         'spo2': spo2,
+        'ecg_rate': ecgRate,
+        'ecg_rr_interval': ecgRrInterval,
+        'ecg_hrv': ecgHrv,
         'gsr': gsr,
         'temperature': temperature,
+        'accel_x': accelX,
+        'accel_y': accelY,
+        'accel_z': accelZ,
+        'gyro_x': gyroX,
+        'gyro_y': gyroY,
+        'gyro_z': gyroZ,
+        'motion_magnitude': motionMagnitude,
+        'gyro_magnitude': gyroMagnitude,
+        'heartRate': heartRate,
+        'ecgRate': ecgRate,
+        'ecgRrInterval': ecgRrInterval,
+        'ecgHrv': ecgHrv,
         'accelX': accelX,
         'accelY': accelY,
         'accelZ': accelZ,
@@ -71,4 +95,9 @@ class SensorData {
         'gyroZ': gyroZ,
         'timestamp': timestamp.toIso8601String(),
       };
+}
+
+double _num(Map<String, dynamic> json, String key, [String? fallbackKey]) {
+  final value = json[key] ?? (fallbackKey == null ? null : json[fallbackKey]);
+  return value is num ? value.toDouble() : double.tryParse('$value') ?? 0;
 }

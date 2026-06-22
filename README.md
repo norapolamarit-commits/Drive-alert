@@ -1,6 +1,6 @@
-# Vita-gaurd Flutter Mobile App
+# Dzoz Flutter Mobile App
 
-Vita-gaurd is a Flutter mobile prototype for Health Monitoring, Risk Detection, and Early Warning from an ESP32-based smartwatch. This version moves the core Streamlit logic into Dart so it can run like a mobile app.
+Dzoz is a Flutter mobile prototype for Health Monitoring, Risk Detection, and Early Warning from an ESP32-based smartwatch. This version moves the core Streamlit logic into Dart so it can run like a mobile app.
 
 ## What Is Included
 
