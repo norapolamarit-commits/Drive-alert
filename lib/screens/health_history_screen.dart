@@ -134,7 +134,7 @@ class _HealthHistorySectionState extends State<HealthHistorySection> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<DzozState>();
+    final state = context.watch<DozState>();
     final allSamples = state.sensorRiskHistory.isEmpty
         ? [
             SensorRiskSample(
@@ -561,7 +561,7 @@ class _HistoryDetailScreenState extends State<_HistoryDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<DzozState>();
+    final state = context.watch<DozState>();
     final samples = state.sensorRiskHistory.isEmpty
         ? [
             SensorRiskSample(

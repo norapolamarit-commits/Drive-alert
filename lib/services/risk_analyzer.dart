@@ -2,55 +2,39 @@ import '../models/risk_result.dart';
 import '../models/sensor_data.dart';
 
 class RiskAnalyzer {
-  RiskResult analyze(SensorData current, List<SensorData> history) {
+  // ── เกณฑ์สำหรับตรวจจับหลับใน (drowsiness) ──────────────────────────────────
+  static const double _drivingMinKmh = 20; // ต่ำกว่านี้ถือว่าไม่ได้ขับรถ
+  static const double _hrvDropTrend = -0.5; // HRV (RMSSD) ลดลงต่อเนื่อง
+  static const double _hrvLowMs = 25; // HRV ต่ำเชิงสัมบูรณ์ = ล้าสะสม
+  static const double _hrDropTrend = -1.0; // HR ค่อยๆ ลด = เริ่มง่วง
+  static const double _calmMotion = 0.5; // การเคลื่อนไหวน้อย (นิ่ง)
+
+  /// [speedKmh] ความเร็วจาก GPS (ถ้ามี) — ใช้ตรวจเฉพาะตอนขับรถ; null = ตรวจตลอด
+  RiskResult analyze(
+    SensorData current,
+    List<SensorData> history, {
+    double? speedKmh,
+  }) {
+    // Safety guard: SpO2 ต่ำวิกฤต — แจ้งฉุกเฉินเสมอ (ป้ายแบบรวม ไม่ใช่ risk class แยก)
+    // เงื่อนไข > 0 กันกรณีเซนเซอร์ยังไม่มีค่า (อ่านได้ 0)
+    if (current.spo2 > 0 && current.spo2 < 90) {
+      return const RiskResult(
+        riskClass: 'Critical Vital Sign',
+        alertLevel: 'Emergency',
+        detectedSigns: [
+          'ค่าออกซิเจนในเลือดต่ำวิกฤต (SpO2 < 90%)',
+        ],
+        recommendation:
+            'หยุดกิจกรรมทันที หายใจช้า ๆ ในที่อากาศถ่ายเท หากไม่ดีขึ้นใน 2 นาที โทร 1669',
+      );
+    }
+
     final recent = [...history.takeLast(12), current];
     final hrTrend =
         _trend(recent.map((item) => item.heartRate.toDouble()).toList());
-    final spo2Trend =
-        _trend(recent.map((item) => item.spo2.toDouble()).toList());
+    final hrvTrend = _trend(recent.map((item) => item.ecgHrv).toList());
     final stressTrend = _trend(recent.map((item) => item.gsr).toList());
-    final lowMovement = current.motionMagnitude < 0.35;
     final highGyro = current.gyroMagnitude > 2.2;
-    final unstableGyro = current.gyroMagnitude > 1.25;
-
-    if (current.heartRate > 140 || current.heartRate < 40) {
-      return const RiskResult(
-        riskClass: 'Cardiac Risk',
-        alertLevel: 'Emergency',
-        detectedSigns: [
-          'Heart Rate อยู่นอกช่วงปลอดภัย',
-          'ต้องเฝ้าระวังทันที',
-        ],
-        recommendation:
-            'หยุดกิจกรรม นั่งพักในที่ปลอดภัย และติดต่อผู้ดูแลหากอาการไม่ดีขึ้น',
-      );
-    }
-
-    if (current.spo2 < 90) {
-      return const RiskResult(
-        riskClass: 'Low SpO2 Risk',
-        alertLevel: 'Emergency',
-        detectedSigns: [
-          'SpO2 ต่ำกว่า 90%',
-          'มีสัญญาณที่ควรได้รับการช่วยเหลือ',
-        ],
-        recommendation:
-            'หยุดกิจกรรม หายใจช้า ๆ ในที่อากาศถ่ายเท และติดต่อผู้ดูแลหากยังผิดปกติ',
-      );
-    }
-
-    if (_fallPattern(recent)) {
-      return const RiskResult(
-        riskClass: 'Fall Risk',
-        alertLevel: 'Emergency',
-        detectedSigns: [
-          'พบแรงเร่งสูง',
-          'หลังจากนั้นมีการเคลื่อนไหวน้อยมาก',
-        ],
-        recommendation:
-            'อย่ารีบลุก ตรวจสอบความปลอดภัยรอบตัว และติดต่อบุคคลฉุกเฉินหากต้องการความช่วยเหลือ',
-      );
-    }
 
     if (highGyro && _repetitiveMovement(recent)) {
       return const RiskResult(
@@ -62,20 +46,6 @@ class RiskAnalyzer {
         ],
         recommendation:
             'หยุดกิจกรรมทันที อยู่ในพื้นที่ปลอดภัย และให้ผู้ดูแลตรวจสอบสถานการณ์',
-      );
-    }
-
-    if (unstableGyro && current.motionMagnitude > 1.15 && current.gsr > 70) {
-      return const RiskResult(
-        riskClass: 'Alcohol-like Impairment Risk',
-        alertLevel: 'Warning',
-        detectedSigns: [
-          'การเคลื่อนไหวไม่สม่ำเสมอ',
-          'Gyroscope ไม่คงที่',
-          'HR/GSR มีรูปแบบผิดปกติ',
-        ],
-        recommendation:
-            'หยุดพักในจุดปลอดภัย หลีกเลี่ยงการขับขี่หรือกิจกรรมที่ต้องใช้สมาธิ',
       );
     }
 
@@ -92,19 +62,14 @@ class RiskAnalyzer {
       );
     }
 
-    if (lowMovement && hrTrend < -1.4 && stressTrend < -1.0) {
-      return const RiskResult(
-        riskClass: 'Drowsiness Risk',
-        alertLevel: 'Warning',
-        detectedSigns: [
-          'Low movement',
-          'Decreasing heart rate',
-          'Reduced alertness pattern',
-        ],
-        recommendation:
-            'พักผ่อนอย่างน้อย 15-20 นาที ก่อนทำกิจกรรมที่ต้องใช้สมาธิ',
-      );
-    }
+    final drowsiness = _assessDrowsiness(
+      current: current,
+      recent: recent,
+      hrTrend: hrTrend,
+      hrvTrend: hrvTrend,
+      speedKmh: speedKmh,
+    );
+    if (drowsiness != null) return drowsiness;
 
     if (current.heartRate > 110 &&
         stressTrend > 1.2 &&
@@ -122,19 +87,6 @@ class RiskAnalyzer {
       );
     }
 
-    if (current.spo2TrendHint(spo2Trend) && current.spo2 < 95) {
-      return const RiskResult(
-        riskClass: 'Low SpO2 Risk',
-        alertLevel: 'Watch',
-        detectedSigns: [
-          'SpO2 มีแนวโน้มลดลง',
-          'ค่าปัจจุบันต่ำกว่าช่วงที่ควรเฝ้าระวัง',
-        ],
-        recommendation:
-            'พักในที่อากาศถ่ายเท วัดซ้ำ และขอความช่วยเหลือหากมีอาการผิดปกติ',
-      );
-    }
-
     return const RiskResult(
       riskClass: 'Normal',
       alertLevel: 'Safe',
@@ -147,21 +99,80 @@ class RiskAnalyzer {
     );
   }
 
+  /// ตรวจจับหลับใน: รวม HRV + แนวโน้ม + ต้องเกิดต่อเนื่อง + เฉพาะตอนขับรถ
+  RiskResult? _assessDrowsiness({
+    required SensorData current,
+    required List<SensorData> recent,
+    required double hrTrend,
+    required double hrvTrend,
+    double? speedKmh,
+  }) {
+    // 1) Driving gate — ถ้ามีข้อมูลความเร็วและไม่ได้ขับรถ ไม่ต้องเตือน
+    if (speedKmh != null && speedKmh < _drivingMinKmh) return null;
+
+    // 2) Sustained — นับ reading ล่าสุดที่ "นิ่ง" ติดต่อกัน (กัน false alarm ชั่ววูบ)
+    final calmStreak =
+        _trailingCount(recent, (s) => s.motionMagnitude < _calmMotion);
+
+    // 3) สัญญาณสรีรวิทยา (เน้น HRV เป็นตัวหลัก)
+    final hrvDeclining = hrvTrend < _hrvDropTrend;
+    final hrvLow = current.ecgHrv > 0 && current.ecgHrv < _hrvLowMs;
+    final hrDeclining = hrTrend < _hrDropTrend;
+    final signals =
+        (hrvDeclining || hrvLow ? 1 : 0) + (hrDeclining ? 1 : 0);
+
+    // 4) Circadian — ช่วง 0-6 น. และ 13-16 น. เสี่ยงสูง ลดจำนวนที่ต้องยืนยัน
+    final needSustain = _highDrowsyHour(current.timestamp) ? 2 : 3;
+
+    if (calmStreak < needSustain || signals == 0) return null;
+
+    // ความรุนแรง: HRV ต่ำ+ลดต่อเนื่อง หรือ HRV+HR ลดพร้อมกัน = อันตรายชัดเจน
+    final severe = (hrvLow && hrvDeclining) || (hrvDeclining && hrDeclining);
+
+    final signs = <String>[
+      'การเคลื่อนไหวน้อยต่อเนื่อง $calmStreak ช่วง',
+      if (hrvDeclining) 'HRV ลดลงต่อเนื่อง (สัญญาณเหนื่อยล้า)',
+      if (hrvLow) 'HRV ต่ำกว่าเกณฑ์ (${current.ecgHrv.toStringAsFixed(0)} ms)',
+      if (hrDeclining) 'อัตราการเต้นหัวใจค่อยๆ ลดลง',
+      if (_highDrowsyHour(current.timestamp)) 'อยู่ในช่วงเวลาที่เสี่ยงง่วงสูง',
+    ];
+
+    return RiskResult(
+      riskClass: 'Drowsiness Risk',
+      alertLevel: severe ? 'Warning' : 'Watch',
+      detectedSigns: signs,
+      recommendation: severe
+          ? 'พบสัญญาณหลับในชัดเจน จอดในจุดปลอดภัยทันที งีบ 15-20 นาที '
+              'ดื่มกาแฟแล้วรอ 20 นาทีก่อนขับต่อ'
+          : 'เริ่มมีสัญญาณง่วง วางแผนหยุดพักใน 15 นาที ดื่มน้ำ และเพิ่มความระมัดระวัง',
+    );
+  }
+
+  /// นับจำนวน element ท้ายสุดที่ผ่านเงื่อนไขแบบติดต่อกัน
+  int _trailingCount(List<SensorData> recent, bool Function(SensorData) test) {
+    var count = 0;
+    for (final s in recent.reversed) {
+      if (test(s)) {
+        count++;
+      } else {
+        break;
+      }
+    }
+    return count;
+  }
+
+  /// ช่วงเวลาที่ร่างกายเสี่ยงง่วงสูงตามนาฬิกาชีวภาพ
+  bool _highDrowsyHour(DateTime t) {
+    final h = t.hour;
+    return (h >= 0 && h < 6) || (h >= 13 && h < 16);
+  }
+
   double _trend(List<double> values) {
     if (values.length < 3) return 0;
     final midpoint = values.length ~/ 2;
     final first = values.take(midpoint).average();
     final second = values.skip(midpoint).average();
     return second - first;
-  }
-
-  bool _fallPattern(List<SensorData> recent) {
-    final spikeIndex =
-        recent.lastIndexWhere((item) => item.motionMagnitude > 2.5);
-    if (spikeIndex == -1 || spikeIndex == recent.length - 1) return false;
-    return recent
-        .skip(spikeIndex + 1)
-        .any((item) => item.motionMagnitude < 0.25);
   }
 
   bool _repetitiveMovement(List<SensorData> recent) {
@@ -181,8 +192,4 @@ extension _ListStats on Iterable<double> {
 extension _TakeLast<T> on List<T> {
   List<T> takeLast(int count) =>
       skip(length > count ? length - count : 0).toList();
-}
-
-extension _Spo2TrendHint on SensorData {
-  bool spo2TrendHint(double trend) => trend < -0.8;
 }

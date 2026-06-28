@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/alert_record.dart';
 
 class AlertStorageService {
-  static const _key = 'dzoz_alert_history';
+  static const _key = 'doz_alert_history';
 
   Future<List<AlertRecord>> loadAlerts() async {
     final prefs = await SharedPreferences.getInstance();

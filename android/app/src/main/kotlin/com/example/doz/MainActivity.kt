@@ -1,4 +1,4 @@
-package com.example.dzoz
+package com.example.doz
 
 import io.flutter.embedding.android.FlutterActivity
 

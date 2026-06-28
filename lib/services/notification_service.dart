@@ -74,9 +74,9 @@ class NotificationService {
 
     final details = NotificationDetails(
       android: AndroidNotificationDetails(
-        'dzoz_health_alerts',
+        'doz_health_alerts',
         'Health alerts',
-        channelDescription: 'Risk detection alerts from Dzoz',
+        channelDescription: 'Risk detection alerts from doz',
         importance: isEmergency ? Importance.max : Importance.high,
         priority: isEmergency ? Priority.max : Priority.high,
         category: AndroidNotificationCategory.alarm,

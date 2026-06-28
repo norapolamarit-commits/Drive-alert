@@ -12,7 +12,7 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 600;
-    final state = context.watch<DzozState>();
+    final state = context.watch<DozState>();
     final sensor = state.currentSensor;
     final risk = state.currentRisk;
     final activeAlerts =
@@ -112,7 +112,7 @@ class DashboardScreen extends StatelessWidget {
 class _WatchConnectionCard extends StatelessWidget {
   const _WatchConnectionCard({required this.state});
 
-  final DzozState state;
+  final DozState state;
 
   @override
   Widget build(BuildContext context) {
@@ -141,7 +141,7 @@ class _WatchConnectionCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Dzoz',
+                  'doz',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w900,
@@ -266,7 +266,7 @@ class _WatchChip extends StatelessWidget {
 class _PersonalInfo extends StatelessWidget {
   const _PersonalInfo({required this.state});
 
-  final DzozState state;
+  final DozState state;
 
   @override
   Widget build(BuildContext context) {

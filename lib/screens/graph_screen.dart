@@ -20,7 +20,7 @@ class _GraphScreenState extends State<GraphScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<DzozState>();
+    final state = context.watch<DozState>();
     final rawHistory = state.sensorHistory.isEmpty
         ? [state.currentSensor]
         : state.sensorHistory;

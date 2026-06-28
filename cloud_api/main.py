@@ -1,8 +1,13 @@
 from datetime import datetime
 from html import escape
+import json
+import math
 import os
+import re
+from collections import Counter
 from typing import Any, Optional
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -13,7 +18,7 @@ except ImportError:
     firestore = None
 
 
-app = FastAPI(title="Dzoz Cloud API")
+app = FastAPI(title="doz Cloud API")
 
 SENSOR_EVENTS: list[dict[str, Any]] = []
 ALERT_EVENTS: list[dict[str, Any]] = []
@@ -72,7 +77,7 @@ def _local_only_response() -> HTMLResponse:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dzoz Local Dashboard</title>
+  <title>doz Local Dashboard</title>
   <style>
     body { background:#050608; color:white; font-family:Arial, sans-serif; margin:24px; }
     .card { background:#11141b; border:1px solid #232833; border-radius:8px; padding:16px; max-width:720px; }
@@ -146,7 +151,7 @@ def _dashboard_html() -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="refresh" content="5">
-  <title>Dzoz Device Dashboard</title>
+  <title>doz Device Dashboard</title>
   <style>
     body {{ background:#050608; color:white; font-family:Arial, sans-serif; margin:24px; }}
     h1, h2 {{ margin-bottom:12px; }}
@@ -158,7 +163,7 @@ def _dashboard_html() -> str:
   </style>
 </head>
 <body>
-  <h1>Dzoz Device Dashboard</h1>
+  <h1>doz Device Dashboard</h1>
   <p class="muted">Auto-refresh every 5 seconds. Devices: {len(latest_by_device)} | Sensor events: {len(SENSOR_EVENTS)} | Alerts: {len(ALERT_EVENTS)}</p>
   <div class="card">
     <h2>Latest Device Data</h2>
@@ -225,22 +230,163 @@ def alert(payload: CloudPayload):
     return {"ok": True, "stored": len(ALERT_EVENTS)}
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# RAG: คลังความรู้ + retriever (char n-gram TF-IDF — รองรับไทย ไม่ต้องใช้ torch/faiss)
+# ─────────────────────────────────────────────────────────────────────────────
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://router.huggingface.co/v1")
+LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("HF_TOKEN") or ""
+LLM_MODEL_DEFAULT = os.getenv("LLM_MODEL", "nectec/Pathumma-llm-text-1.0.0:featherless-ai")
+RAG_TOP_K = int(os.getenv("RAG_TOP_K", "3"))
+# คะแนนความเกี่ยวข้องขั้นต่ำ — ต่ำกว่านี้ถือว่าไม่เกี่ยว (กันดึงความรู้สุขภาพใส่คำถามทั่วไป)
+RAG_MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.12"))
+
+SYSTEM_TH = (
+    "คุณคือ doz / VitaGuard AI ผู้ช่วยดูแลสุขภาพที่เป็นมิตร "
+    "(You are doz / VitaGuard AI, a friendly health companion.)\n"
+    "\n"
+    "หน้าที่หลัก 3 อย่าง / Your 3 main duties:\n"
+    "1. แนะนำการปฏิบัติตัว — บอกชัดๆ ว่าควรทำอะไร (เช่น ควรพักผ่อน ควรดื่มน้ำ ควรหยุดพัก)\n"
+    "2. วิเคราะห์สุขภาพสั้นๆ — สรุปสภาพจากค่าเซนเซอร์/แนวโน้มแบบเข้าใจง่าย "
+    "(เช่น 'ช่วงนี้พักผ่อนน้อยไป' 'หัวใจเต้นเร็วกว่าปกติ')\n"
+    "3. ถามตอบและทักทาย — คุยกับผู้ใช้อย่างเป็นมิตร อบอุ่น ให้กำลังใจ\n"
+    "\n"
+    "แนวทางการตอบ / Guidelines:\n"
+    "- ตอบเป็น 'ภาษาเดียวกับผู้ใช้' เสมอ (ไทยถามไทยตอบ / English in, English out)\n"
+    "- ทักทายหรือคุยเล่น (สวัสดี, ขอบคุณ, hello, how are you) ตอบเป็นมิตรสั้นๆ ไม่ปฏิเสธ\n"
+    "- คำถามสุขภาพ: วิเคราะห์สั้นๆ 1 ประโยค แล้วตามด้วยคำแนะนำว่าควรทำอะไรเป็นข้อๆ\n"
+    "- ตอบกระชับ ตรงประเด็น เป็นกันเอง ไม่อธิบายยืดยาว ไม่ตอบข้อความสำเร็จรูปเดิมซ้ำๆ\n"
+    "- ห้ามวินิจฉัยโรคแทนแพทย์ ถ้าเป็นเหตุฉุกเฉินรุนแรงให้แนะนำโทร 1669 ก่อนเป็นอันดับแรก"
+)
+
+
+def _ngrams(text: str, n: int = 3) -> list[str]:
+    text = re.sub(r"\s+", "", text.lower())
+    if len(text) < n:
+        return [text] if text else []
+    return [text[i : i + n] for i in range(len(text) - n + 1)]
+
+
+class TfidfRetriever:
+    """retriever แบบ char n-gram TF-IDF (pure python) — เหมาะภาษาไทยที่ไม่มีเว้นวรรค"""
+
+    def __init__(self, docs: list[str]):
+        self.docs = docs
+        tokens = [Counter(_ngrams(d)) for d in docs]
+        df: Counter = Counter()
+        for c in tokens:
+            df.update(c.keys())
+        n = max(len(docs), 1)
+        self.idf = {t: math.log((1 + n) / (1 + dft)) + 1 for t, dft in df.items()}
+        self.vecs = [self._vec(c) for c in tokens]
+        self.norms = [math.sqrt(sum(v * v for v in vec.values())) or 1.0 for vec in self.vecs]
+
+    def _vec(self, counter: Counter) -> dict:
+        return {t: tf * self.idf.get(t, 0.0) for t, tf in counter.items()}
+
+    def search(self, query: str, k: int = 3) -> list[tuple[int, float]]:
+        qv = self._vec(Counter(_ngrams(query)))
+        qn = math.sqrt(sum(v * v for v in qv.values())) or 1.0
+        scored = []
+        for i, dv in enumerate(self.vecs):
+            dot = sum(qv.get(t, 0.0) * val for t, val in dv.items())
+            scored.append((i, dot / (qn * self.norms[i])))
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return [(i, s) for i, s in scored[:k] if s > 0]
+
+
+_KB_PATH = os.path.join(os.path.dirname(__file__), "knowledge.json")
+try:
+    with open(_KB_PATH, encoding="utf-8") as f:
+        KB: list[dict[str, Any]] = json.load(f)
+except Exception:
+    KB = []
+_RETRIEVER = TfidfRetriever([f"{e.get('q', '')} {e.get('a', '')}" for e in KB]) if KB else None
+
+
+def _extract_question(prompt: str, explicit: str) -> str:
+    if explicit and explicit.strip():
+        return explicit.strip()
+    m = re.search(r"(?:User question|คำถาม)\s*[:：]\s*(.+)", prompt, re.S)
+    return (m.group(1) if m else prompt).strip()
+
+
+def _retrieve(query: str) -> tuple[str, list[dict[str, Any]]]:
+    if not _RETRIEVER or not query.strip():
+        return "", []
+    lines, used = [], []
+    for idx, score in _RETRIEVER.search(query, RAG_TOP_K):
+        if score < RAG_MIN_SCORE:
+            continue  # ไม่เกี่ยวพอ → ข้าม (คำถามทั่วไปจะได้ไม่มีความรู้สุขภาพปน)
+        ans = KB[idx].get("a", "")
+        if ans:
+            lines.append(f"- {ans}")
+            used.append(KB[idx])
+    return "\n".join(lines), used
+
+
+def _fallback_answer(prompt: str, context: str) -> str:
+    # ใช้เฉพาะตอน LLM ไม่พร้อม (ไม่มี token / เรียกไม่สำเร็จ)
+    low = prompt.lower()
+    if "emergency" in low:
+        return "ตรวจพบการแจ้งเตือนระดับฉุกเฉิน หยุดกิจกรรมทันที อยู่ในที่ปลอดภัย และโทร 1669 หากอาการไม่ดีขึ้น"
+    if context:
+        return "จากข้อมูลที่เกี่ยวข้อง:\n" + context
+    if "history" in low or "trend" in low or "แนวโน้ม" in prompt:
+        return "ดูแนวโน้มได้จากประวัติการแจ้งเตือนและประเภทความเสี่ยงที่เกิดซ้ำ"
+    return (
+        "ขออภัย ตอนนี้ผู้ช่วย AI ยังเชื่อมต่อไม่ได้ จึงตอบคำถามทั่วไปไม่ได้ชั่วคราว "
+        "(สำหรับเรื่องสุขภาพ/ความปลอดภัยยังให้คำแนะนำเบื้องต้นได้) กรุณาลองใหม่อีกครั้ง"
+    )
+
+
 @app.post("/chat")
 def chat(payload: CloudPayload):
-    prompt = str(payload.model_dump().get("prompt", ""))
-    if "Emergency" in prompt:
-        answer = (
-            "Emergency early warning is active. Stop activity, stay in a safe "
-            "place, and contact emergency support if the condition continues."
-        )
-    elif "history" in prompt.lower() or "trend" in prompt.lower():
-        answer = "Recent history can be reviewed from alert trends and repeated risk types."
-    else:
-        answer = (
-            "Dzoz cloud assistant is online. I can explain current sensor "
-            "values, Risk Detection results, and safety recommendations."
-        )
-    return {"model": "vita-gaurd-cloud-mock", "answer": answer}
+    data = payload.model_dump()
+    prompt = str(data.get("prompt", ""))
+    model = str(data.get("model") or LLM_MODEL_DEFAULT)
+    question = _extract_question(prompt, str(data.get("question", "")))
+
+    # [1+2] RAG retrieve ความรู้ที่เกี่ยวข้อง
+    context, used = _retrieve(question)
+    sources = [e.get("q", "") for e in used]
+
+    # [3] ประกอบ prompt (ความรู้อ้างอิง + prompt เดิมที่มีค่าเซนเซอร์ครบอยู่แล้ว)
+    user_content = (
+        f"[ข้อมูลอ้างอิงที่อาจเกี่ยวข้อง — ใช้ประกอบถ้าตรงกับคำถามเท่านั้น]\n{context}\n\n"
+        if context
+        else ""
+    ) + prompt
+
+    # [4] เรียก Pathumma LLM ผ่าน HuggingFace router (ไม่ต้องใช้ GPU)
+    if LLM_API_KEY:
+        try:
+            resp = httpx.post(
+                f"{LLM_BASE_URL}/chat/completions",
+                headers={"Authorization": f"Bearer {LLM_API_KEY}"},
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": SYSTEM_TH},
+                        {"role": "user", "content": user_content},
+                    ],
+                    "max_tokens": 256,
+                    "temperature": 0.6,
+                },
+                timeout=30.0,
+            )
+            resp.raise_for_status()
+            answer = resp.json()["choices"][0]["message"]["content"].strip()
+            if answer:
+                return {"model": model, "answer": answer, "rag_sources": sources}
+        except Exception as exc:  # LLM ล่ม/ไม่ได้ตั้ง token → ใช้ fallback
+            print(f"[chat] LLM error, falling back: {exc}")
+
+    # fallback: ตอบจากความรู้ที่ดึงมา (ยังทำงานได้แม้ไม่มี token)
+    return {
+        "model": "vita-gaurd-rag-fallback",
+        "answer": _fallback_answer(prompt, context),
+        "rag_sources": sources,
+    }
 
 
 def _validate_sensor_event(event: dict[str, Any]) -> list[str]:

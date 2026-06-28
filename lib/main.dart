@@ -10,6 +10,7 @@ import 'models/risk_result.dart';
 import 'models/sensor_data.dart';
 import 'models/sensor_risk_sample.dart';
 import 'screens/alert_history_screen.dart';
+import 'screens/chatbot_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/graph_screen.dart';
 import 'screens/profile_screen.dart';
@@ -24,18 +25,18 @@ import 'services/phratuma_service.dart';
 import 'services/risk_analyzer.dart';
 
 void main() {
-  runApp(const DzozApp());
+  runApp(const DozApp());
 }
 
-class DzozApp extends StatelessWidget {
-  const DzozApp({super.key});
+class DozApp extends StatelessWidget {
+  const DozApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => DzozState()..initialize(),
+      create: (_) => DozState()..initialize(),
       child: MaterialApp(
-        title: 'Dzoz',
+        title: 'doz',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(
@@ -63,36 +64,37 @@ class DzozApp extends StatelessWidget {
             ),
           ),
         ),
-        home: const DzozGate(),
+        home: const DozGate(),
       ),
     );
   }
 }
 
-class DzozGate extends StatelessWidget {
-  const DzozGate({super.key});
+class DozGate extends StatelessWidget {
+  const DozGate({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final setupDone = context.watch<DzozState>().setupDone;
-    return setupDone ? const DzozShell() : const SetupScreen();
+    final setupDone = context.watch<DozState>().setupDone;
+    return setupDone ? const DozShell() : const SetupScreen();
   }
 }
 
-class DzozShell extends StatefulWidget {
-  const DzozShell({super.key});
+class DozShell extends StatefulWidget {
+  const DozShell({super.key});
 
   @override
-  State<DzozShell> createState() => _DzozShellState();
+  State<DozShell> createState() => _DozShellState();
 }
 
-class _DzozShellState extends State<DzozShell> {
+class _DozShellState extends State<DozShell> {
   int _index = 0;
 
   static const _screens = [
     DashboardScreen(),
     GraphScreen(),
     AlertHistoryScreen(),
+    ChatbotScreen(),
     ProfileScreen(),
   ];
 
@@ -100,6 +102,7 @@ class _DzozShellState extends State<DzozShell> {
     'Current Health Status',
     'Health Data & History',
     'Risk Alert Log',
+    'Chatbot',
     'Profile',
   ];
 
@@ -107,6 +110,7 @@ class _DzozShellState extends State<DzozShell> {
     'Status',
     'Data',
     'Alerts',
+    'Chat',
     'Profile',
   ];
 
@@ -114,6 +118,7 @@ class _DzozShellState extends State<DzozShell> {
     Icons.watch_outlined,
     Icons.monitor_heart_outlined,
     Icons.notifications_active_outlined,
+    Icons.chat_bubble_outline,
     Icons.person_outline,
   ];
 
@@ -315,7 +320,7 @@ class _StreamlitTab extends StatelessWidget {
   }
 }
 
-class DzozState extends ChangeNotifier {
+class DozState extends ChangeNotifier {
   final MockDataService _mockDataService = MockDataService();
   final RiskAnalyzer _riskAnalyzer = RiskAnalyzer();
   final AlertStorageService _alertStorage = AlertStorageService();
@@ -353,7 +358,7 @@ class DzozState extends ChangeNotifier {
   final List<ChatMessage> chatMessages = [
     ChatMessage(
       text:
-          'Hello, I am Dzoz assistant. I can explain early warnings, sensor values, actions, and history.',
+          'Hello, I am doz assistant. I can explain early warnings, sensor values, actions, and history.',
       isUser: false,
     ),
   ];
@@ -877,6 +882,12 @@ class DzozState extends ChangeNotifier {
     cloudBaseUrl = configuredCloudBaseUrl.isNotEmpty
         ? configuredCloudBaseUrl
         : (prefs.getString('cloudBaseUrl') ?? cloudBaseUrl);
+    // ถ้าตั้ง base URL ผ่าน --dart-define ให้ chatbot ใช้ /chat ของ server เดียวกัน
+    // (กันกรณีค้าง placeholder example.com แล้ว chatbot ตอบ fallback เดิมทุกครั้ง)
+    if (configuredCloudBaseUrl.isNotEmpty) {
+      final base = configuredCloudBaseUrl.replaceAll(RegExp(r'/+$'), '');
+      phratumaEndpoint = '$base/chat';
+    }
     modelName = prefs.getString('modelName') ?? modelName;
     language = prefs.getString('language') ?? language;
     llmEnabled = prefs.getBool('llmEnabled') ?? llmEnabled;

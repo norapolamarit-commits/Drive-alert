@@ -1,6 +1,36 @@
-# Dzoz Flutter Mobile App
+# doz Flutter Mobile App
 
-Dzoz is a Flutter mobile prototype for Health Monitoring, Risk Detection, and Early Warning from an ESP32-based smartwatch. This version moves the core Streamlit logic into Dart so it can run like a mobile app.
+doz is a Flutter mobile prototype for Health Monitoring, Risk Detection, and Early Warning from an ESP32-based smartwatch. This version moves the core Streamlit logic into Dart so it can run like a mobile app.
+
+## Project Structure
+
+```text
+.
+├── lib/                # Flutter app source (models, screens, services, widgets)
+├── android/ ios/       # Mobile platform projects
+├── web/ macos/         # Other platform targets
+├── linux/ windows/     #
+├── test/               # Flutter tests
+├── cloud_api/          # Python (FastAPI) backend — RAG chat + sensor/alert ingest
+│   ├── main.py
+│   ├── requirements.txt
+│   ├── render.yaml     # Render deployment blueprint
+│   ├── knowledge.json  # RAG knowledge base
+│   └── .env.example    # Backend environment variables (copy to .env)
+├── docs/               # Documentation
+│   └── DISTRIBUTION.md # Build & distribution guide (Android + iOS)
+├── scripts/            # Helper scripts
+│   └── build_apps.sh   # Build Android + iOS with an embedded cloud URL
+├── pubspec.yaml
+└── README.md
+```
+
+> Build output (`build/`), tooling caches (`.dart_tool/`), and local backups
+> (`outputs/`, `work/`) are intentionally excluded from version control via
+> `.gitignore`.
+
+For build and distribution instructions (Android APK / iOS TestFlight), see
+[`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
 
 ## What Is Included
 

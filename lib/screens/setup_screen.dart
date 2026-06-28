@@ -27,7 +27,7 @@ class _SetupScreenState extends State<SetupScreen> {
   @override
   void initState() {
     super.initState();
-    final state = context.read<DzozState>();
+    final state = context.read<DozState>();
     _nameController = TextEditingController(text: state.userName);
     _weightController =
         TextEditingController(text: state.weight.toStringAsFixed(0));
@@ -129,7 +129,7 @@ class _SetupScreenState extends State<SetupScreen> {
     if (!_formKey.currentState!.validate()) return;
     final birthDate = _birthDate;
     if (birthDate == null) return;
-    context.read<DzozState>().completeSetup(
+    context.read<DozState>().completeSetup(
           newName: _nameController.text,
           newPrivacyPolicyAcceptedAt: _privacyAcceptedAt ?? DateTime.now(),
           newWeight: double.parse(_weightController.text),
@@ -287,7 +287,7 @@ class _PrivacyPolicyAccept extends StatelessWidget {
                   ),
                 ),
                 const Text(
-                  ' and allow Dzoz to use my health, BLE, and location data for monitoring.',
+                  ' and allow doz to use my health, BLE, and location data for monitoring.',
                   style: TextStyle(color: Colors.white, height: 1.35),
                 ),
               ],
@@ -333,7 +333,7 @@ class _SetupHero extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Dzoz',
+                  'doz',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w900,
                         color: Colors.white,

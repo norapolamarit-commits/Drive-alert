@@ -28,7 +28,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    final state = context.read<DzozState>();
+    final state = context.read<DozState>();
     _weightController =
         TextEditingController(text: state.weight.toStringAsFixed(0));
     _heightController =
@@ -58,7 +58,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<DzozState>();
+    final state = context.watch<DozState>();
     final compact = MediaQuery.sizeOf(context).width < 600;
 
     return ListView(
@@ -200,12 +200,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _findDevice() async {
-    final found = await context.read<DzozState>().findDeviceForSetup();
+    final found = await context.read<DozState>().findDeviceForSetup();
     if (!mounted) return;
     setState(() => _deviceFound = found);
   }
 
-  void _syncPersonalControllers(DzozState state) {
+  void _syncPersonalControllers(DozState state) {
     _weightController.text = state.weight.toStringAsFixed(0);
     _heightController.text = state.height.toStringAsFixed(0);
     _birthDate = state.birthDate ?? _birthDateFromAge(state.age);
@@ -216,7 +216,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _gender = state.gender;
   }
 
-  Future<void> _savePersonalInfo(DzozState state) async {
+  Future<void> _savePersonalInfo(DozState state) async {
     await state.updatePersonalInfo(
       newWeight: double.tryParse(_weightController.text) ?? state.weight,
       newHeight: double.tryParse(_heightController.text) ?? state.height,
@@ -259,7 +259,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
-  void _showExportDialog(BuildContext context, DzozState state) {
+  void _showExportDialog(BuildContext context, DozState state) {
     final csv = state.exportSensorHistoryCsv();
     showDialog<void>(
       context: context,
@@ -384,7 +384,7 @@ class _PersonalInfoEditor extends StatelessWidget {
 class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader({required this.state});
 
-  final DzozState state;
+  final DozState state;
 
   @override
   Widget build(BuildContext context) {
@@ -494,7 +494,7 @@ class _DeviceSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<DzozState>();
+    final state = context.watch<DozState>();
     return _Section(
       title: 'My Device',
       child: _DeviceSummaryCard(
@@ -515,7 +515,7 @@ class _DeviceSection extends StatelessWidget {
 class _DeviceSummaryCard extends StatelessWidget {
   const _DeviceSummaryCard({required this.state, required this.onTap});
 
-  final DzozState state;
+  final DozState state;
   final VoidCallback onTap;
 
   @override
@@ -599,7 +599,7 @@ class _DeviceDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<DzozState>();
+    final state = context.watch<DozState>();
     final canConnect = deviceFound && !state.bleConnected && !state.scanningBle;
     final bleStatusType = state.scanningBle
         ? _StatusType.loading
@@ -687,7 +687,7 @@ class _DeviceDetailScreen extends StatelessWidget {
               width: double.infinity,
               child: OutlinedButton.icon(
                 onPressed: () =>
-                    context.read<DzozState>().requestNotifications(),
+                    context.read<DozState>().requestNotifications(),
                 icon: const Icon(Icons.notifications_active_outlined),
                 label: const Text('Enable notifications'),
               ),
@@ -742,8 +742,7 @@ class _DeviceDetailScreen extends StatelessWidget {
                 Expanded(
                   child: FilledButton.icon(
                     onPressed: canConnect
-                        ? () =>
-                            context.read<DzozState>().connectDeviceForSetup()
+                        ? () => context.read<DozState>().connectDeviceForSetup()
                         : null,
                     icon: const Icon(Icons.bluetooth_connected),
                     label: Text(state.bleConnected ? 'Connected' : 'Connect'),
@@ -757,7 +756,7 @@ class _DeviceDetailScreen extends StatelessWidget {
                 Expanded(
                   child: TextButton.icon(
                     onPressed: state.bleConnected
-                        ? () => context.read<DzozState>().disconnectBle()
+                        ? () => context.read<DozState>().disconnectBle()
                         : null,
                     icon: const Icon(Icons.bluetooth_disabled),
                     label: const Text('Disconnect'),
@@ -768,7 +767,7 @@ class _DeviceDetailScreen extends StatelessWidget {
                   child: TextButton.icon(
                     onPressed: state.bleConnected
                         ? null
-                        : () => context.read<DzozState>().disconnectBle(),
+                        : () => context.read<DozState>().disconnectBle(),
                     icon: const Icon(Icons.sensors),
                     label: const Text('Use mock BLE'),
                   ),
@@ -778,7 +777,7 @@ class _DeviceDetailScreen extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: TextButton.icon(
-                onPressed: () => context.read<DzozState>().forgetDevice(),
+                onPressed: () => context.read<DozState>().forgetDevice(),
                 icon: const Icon(Icons.delete_outline),
                 label: const Text('Forget device'),
               ),
@@ -789,7 +788,7 @@ class _DeviceDetailScreen extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: state.requestingLocation
                     ? null
-                    : () => context.read<DzozState>().updateLocation(),
+                    : () => context.read<DozState>().updateLocation(),
                 icon: const Icon(Icons.location_on_outlined),
                 label: Text(
                   state.requestingLocation
@@ -808,7 +807,7 @@ class _DeviceDetailScreen extends StatelessWidget {
 class _PrivacySection extends StatelessWidget {
   const _PrivacySection({required this.state});
 
-  final DzozState state;
+  final DozState state;
 
   @override
   Widget build(BuildContext context) {

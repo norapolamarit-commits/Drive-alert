@@ -1,7 +1,10 @@
-# Miscellaneous
+# ============================================================
+#  doz / VitaGuard — .gitignore
+# ============================================================
+
+# --- Misc / OS ---
 *.class
 *.log
-*.pyc
 *.swp
 .DS_Store
 .atom/
@@ -12,7 +15,7 @@
 .swiftpm/
 migrate_working_dir/
 
-# IntelliJ related
+# --- IDE (IntelliJ / Android Studio) ---
 *.iml
 *.ipr
 *.iws
@@ -23,34 +26,66 @@ migrate_working_dir/
 # is commented out by default.
 #.vscode/
 
-# Flutter/Dart/Pub related
+# ============================================================
+#  Flutter / Dart / Pub
+# ============================================================
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
+.flutter-plugins
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
 /build/
 /coverage/
 
-# Symbolication related
+# Symbolication / obfuscation
 app.*.symbols
-
-# Obfuscation related
 app.*.map.json
 
-# Android Studio will place build artifacts here
+# Android build artifacts
 /android/app/debug
 /android/app/profile
 /android/app/release
-
-# Local machine and generated artifacts
 android/local.properties
 android/.gradle/
 android/.kotlin/
+android/key.properties
+*.jks
+*.keystore
+
+# iOS / macOS generated
 ios/Flutter/Generated.xcconfig
 ios/Flutter/flutter_export_environment.sh
 ios/Flutter/ephemeral/
 macos/Flutter/ephemeral/
+**/Pods/
+
+# ============================================================
+#  Python backend (cloud_api/)
+# ============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+*.env
+!*.env.example
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# ============================================================
+#  Project-specific (not for version control)
+# ============================================================
 outputs/
+work/
 smart_health_risk_alert_watch/
+
+# Cloud service account credentials — NEVER commit
+*-service-account*.json
+google-credentials*.json
+serviceAccount*.json

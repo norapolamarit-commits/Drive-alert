@@ -5,3 +5,14 @@ services:
     plan: free
     buildCommand: "python -m pip install -r requirements.txt"
     startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      # HuggingFace access token (router) สำหรับเรียก Pathumma LLM — ตั้งค่าใน Render dashboard
+      - key: LLM_API_KEY
+        sync: false
+      # โมเดล/ผู้ให้บริการ inference (เปลี่ยนได้ภายหลัง)
+      - key: LLM_MODEL
+        value: "nectec/Pathumma-llm-text-1.0.0:featherless-ai"
+      - key: LLM_BASE_URL
+        value: "https://router.huggingface.co/v1"
+      - key: RAG_TOP_K
+        value: "3"

@@ -33,6 +33,8 @@ class PhratumaService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'model': model,
+              // ส่งคำถามดิบแยก เพื่อให้ RAG บน server ดึงความรู้ได้แม่นขึ้น
+              'question': userMessage,
               'prompt': buildPrompt(
                 userMessage: userMessage,
                 sensorData: sensorData,
@@ -70,7 +72,7 @@ class PhratumaService {
     String alertHistory = '',
   }) {
     return '''
-You are Dzoz AI Health Monitoring Assistant.
+You are doz AI Health Monitoring Assistant.
 Explain Risk Detection and Early Warning results in simple language.
 Provide safety recommendations and user guidance.
 
@@ -117,10 +119,10 @@ If alert level is Emergency, recommend stopping activity and contacting emergenc
       return 'Recent history: ${alertHistory.isEmpty ? 'No repeated alerts yet.' : alertHistory}. Current Risk Detection result is ${riskResult.riskClass} at ${riskResult.alertLevel}. ${riskResult.recommendation}';
     }
     if (riskResult.alertLevel == 'Emergency') {
-      return 'Dzoz detected ${riskResult.riskClass} at Emergency level. Contributing values: $values. Stop activity, stay in a safe place, and contact emergency support if the condition continues. Profile considered: $userProfile';
+      return 'doz detected ${riskResult.riskClass} at Emergency level. Contributing values: $values. Stop activity, stay in a safe place, and contact emergency support if the condition continues. Profile considered: $userProfile';
     }
     if (riskResult.alertLevel == 'Warning') {
-      return 'Dzoz detected ${riskResult.riskClass} at Warning level because ${riskResult.detectedSigns.join(', ')}. Contributing values: $values. Recommended action: ${riskResult.recommendation}';
+      return 'doz detected ${riskResult.riskClass} at Warning level because ${riskResult.detectedSigns.join(', ')}. Contributing values: $values. Recommended action: ${riskResult.recommendation}';
     }
     return 'Current Health Monitoring status is ${riskResult.riskClass} at ${riskResult.alertLevel}. Contributing values: $values. Recommended action: ${riskResult.recommendation}';
   }

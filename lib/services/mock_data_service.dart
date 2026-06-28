@@ -10,25 +10,19 @@ class MockDataService {
     'Normal',
     'Drowsiness Risk',
     'Fatigue Risk',
-    'Cardiac Risk',
     'Seizure-like Risk',
-    'Fall Risk',
-    'Low SpO2 Risk',
-    'Alcohol-like Impairment Risk',
     'High Stress Alert',
     'Immobilization Alert',
   ];
 
   SensorData nextAuto() {
-    final profile = _tick % 36;
-    if (profile >= 7 && profile <= 10) return next('Drowsiness Risk');
-    if (profile >= 12 && profile <= 15) return next('Fatigue Risk');
-    if (profile == 18) return next('Cardiac Risk');
-    if (profile == 21) return next('Low SpO2 Risk');
-    if (profile >= 24 && profile <= 26) return next('Fall Risk');
-    if (profile >= 29 && profile <= 32) {
-      return next('Alcohol-like Impairment Risk');
-    }
+    // หมุนเวียนผ่านทุกสถานการณ์ที่เหลือ คั่นด้วยช่วง Normal
+    final profile = _tick % 40;
+    if (profile >= 6 && profile <= 9) return next('Drowsiness Risk');
+    if (profile >= 13 && profile <= 16) return next('Fatigue Risk');
+    if (profile >= 22 && profile <= 24) return next('High Stress Alert');
+    if (profile >= 30 && profile <= 32) return next('Seizure-like Risk');
+    if (profile == 38) return next('Immobilization Alert');
     return next('Normal');
   }
 
@@ -54,14 +48,6 @@ class MockDataService {
           motion: 0.45 + jitter,
           gyro: 0.35,
         );
-      case 'Cardiac Risk':
-        return _base(
-          heartRate: _tick.isEven ? 148 : 36,
-          spo2: 94,
-          gsr: 65,
-          motion: 0.7,
-          gyro: 0.3,
-        );
       case 'Seizure-like Risk':
         return _base(
           heartRate: 118,
@@ -69,30 +55,6 @@ class MockDataService {
           gsr: 78,
           motion: 1.3 + wave.abs(),
           gyro: 2.4 + wave.abs(),
-        );
-      case 'Fall Risk':
-        return _base(
-          heartRate: 104,
-          spo2: 95,
-          gsr: 72,
-          motion: _tick % 8 == 1 ? 3.1 : 0.1,
-          gyro: _tick % 8 == 1 ? 1.8 : 0.05,
-        );
-      case 'Low SpO2 Risk':
-        return _base(
-          heartRate: 96,
-          spo2: 88 + _random.nextInt(2),
-          gsr: 55,
-          motion: 0.55,
-          gyro: 0.2,
-        );
-      case 'Alcohol-like Impairment Risk':
-        return _base(
-          heartRate: 108 + _random.nextInt(10),
-          spo2: 95,
-          gsr: 76 + _random.nextDouble() * 8,
-          motion: 1.25 + wave.abs(),
-          gyro: 1.35 + _random.nextDouble(),
         );
       case 'High Stress Alert':
         return _base(
