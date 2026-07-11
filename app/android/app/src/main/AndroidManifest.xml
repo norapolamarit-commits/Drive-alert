@@ -58,5 +58,10 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- ให้ url_launcher เปิดแอปโทรศัพท์ (tel:) สำหรับปุ่ม "Contact emergency person" -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="tel"/>
+        </intent>
     </queries>
 </manifest>

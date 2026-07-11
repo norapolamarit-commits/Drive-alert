@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart';
 import '../models/alert_record.dart';
@@ -158,14 +159,60 @@ class _RiskTypeSummary extends StatelessWidget {
 class _LatestResponseButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return const Wrap(
+    return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
-        _ResponseButton(label: 'I am safe'),
-        _ResponseButton(label: 'I stopped safely'),
-        _ResponseButton(label: 'Contact emergency person'),
+        const _ResponseButton(label: 'I am safe'),
+        const _ResponseButton(label: 'I stopped safely'),
+        _EmergencyContactButton(
+          onPressed: () => _callEmergencyContact(context),
+        ),
       ],
+    );
+  }
+}
+
+/// เรียกเบอร์ผู้ติดต่อฉุกเฉินจริง (ไม่ใช่แค่บันทึกข้อความ) แล้วค่อยบันทึกการตอบรับ
+Future<void> _callEmergencyContact(BuildContext context) async {
+  const label = 'Contact emergency person';
+  final state = context.read<DozState>();
+  final phone = state.emergencyContactPhone.trim();
+
+  if (phone.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'No emergency contact number set. Add one in Profile first.',
+        ),
+      ),
+    );
+    return;
+  }
+
+  final uri = Uri(scheme: 'tel', path: phone);
+  final launched = await launchUrl(uri);
+  if (!context.mounted) return;
+  if (!launched) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open the phone dialer.')),
+    );
+    return;
+  }
+  await state.respondToLatestAlert(label);
+}
+
+class _EmergencyContactButton extends StatelessWidget {
+  const _EmergencyContactButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: const Icon(Icons.call, size: 16),
+      label: const Text('Contact emergency person'),
     );
   }
 }

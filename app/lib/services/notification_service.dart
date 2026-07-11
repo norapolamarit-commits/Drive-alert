@@ -82,6 +82,11 @@ class NotificationService {
         category: AndroidNotificationCategory.alarm,
         playSound: true,
         enableVibration: true,
+        // Watch/Warning: ซ่อนเนื้อหาสุขภาพบนหน้าจอล็อก (ความเป็นส่วนตัว)
+        // Emergency: โชว์เต็มบนหน้าจอล็อก — คนรอบข้างอาจต้องเห็นเพื่อช่วยเหลือทันที
+        visibility: isEmergency
+            ? NotificationVisibility.public
+            : NotificationVisibility.private,
       ),
       iOS: const DarwinNotificationDetails(
         presentAlert: true,
