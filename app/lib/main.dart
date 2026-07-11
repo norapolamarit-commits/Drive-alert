@@ -10,7 +10,6 @@ import 'models/risk_result.dart';
 import 'models/sensor_data.dart';
 import 'models/sensor_risk_sample.dart';
 import 'screens/alert_history_screen.dart';
-import 'screens/chatbot_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/graph_screen.dart';
 import 'screens/profile_screen.dart';
@@ -94,7 +93,6 @@ class _DozShellState extends State<DozShell> {
     DashboardScreen(),
     GraphScreen(),
     AlertHistoryScreen(),
-    ChatbotScreen(),
     ProfileScreen(),
   ];
 
@@ -102,7 +100,6 @@ class _DozShellState extends State<DozShell> {
     'Current Health Status',
     'Health Data & History',
     'Risk Alert Log',
-    'Chatbot',
     'Profile',
   ];
 
@@ -110,7 +107,6 @@ class _DozShellState extends State<DozShell> {
     'Status',
     'Data',
     'Alerts',
-    'Chat',
     'Profile',
   ];
 
@@ -118,7 +114,6 @@ class _DozShellState extends State<DozShell> {
     Icons.watch_outlined,
     Icons.monitor_heart_outlined,
     Icons.notifications_active_outlined,
-    Icons.chat_bubble_outline,
     Icons.person_outline,
   ];
 
@@ -385,6 +380,18 @@ class DozState extends ChangeNotifier {
   DateTime? lastSensorUpdateAt;
   String sensorStatus = 'No sensor data yet';
   String cloudStatus = 'Cloud sync disabled';
+  String aiAdvice = ''; // คำแนะนำจาก LLM (โหมดให้คำแนะนำอย่างเดียว)
+  String aiAdviceCause = ''; // สาเหตุที่ระบบตรวจพบ (จาก /advice)
+  String aiAdviceDisclaimer = ''; // ข้อความปฏิเสธความรับผิด (จาก /advice)
+  String _lastAdviceFor = ''; // กันเรียก LLM ซ้ำสถานะเดิม
+
+  // ── Response-timeout escalation: Warning ที่ไม่ตอบรับใน 30 วิ → ยกระดับ Emergency ──
+  // ผูกกับ "episode" ของสถานะ (currentRisk.alertLevel) ไม่ใช่ AlertRecord ใดตัวหนึ่ง
+  // เพื่อไม่ให้ dedup-window (20s) รีเซ็ตตัวจับเวลาก่อนครบ 30s
+  static const Duration _warningResponseTimeout = Duration(seconds: 30);
+  Timer? _warningTimer;
+  bool _warningEpisodeAcknowledged = false;
+  bool _disposed = false;
   String locationStatus = 'Location not requested';
   String notificationStatus = 'Notification not requested';
   bool requestingLocation = false;
@@ -392,7 +399,7 @@ class DozState extends ChangeNotifier {
   double? longitude;
   int deviceBattery = 96;
   DateTime? privacyPolicyAcceptedAt;
-  String privacyPolicyVersion = '1.0';
+  String privacyPolicyVersion = '1.1';
   final List<String> consentScopes = const [
     'health_data',
     'location',
@@ -505,6 +512,9 @@ class DozState extends ChangeNotifier {
     sensorStatus = _sensorStatusFor(data);
     deviceBattery = (96 - sensorHistory.length ~/ 4).clamp(18, 96).toInt();
     currentRisk = _riskAnalyzer.analyze(data, sensorHistory);
+    // ติดตาม response-timeout ตาม "สถานะปัจจุบัน" ทุก tick — ไม่ผูกกับ dedup ด้านล่าง
+    // (ถ้าผูกกับ alert ที่ถูก dedup กันไว้ ตัวจับเวลาจะถูกรีเซ็ตก่อนครบ 30s เสมอ)
+    _trackWarningEscalation(currentRisk);
     sensorHistory.add(data);
     if (sensorHistory.length > 240) sensorHistory.removeAt(0);
     sensorRiskHistory
@@ -529,7 +539,100 @@ class DozState extends ChangeNotifier {
       }
     }
     _syncSensorToCloud(data, currentRisk);
+    _refreshAdvice(data, currentRisk);
     notifyListeners();
+  }
+
+  /// ติดตาม "episode" ของ Warning เพื่อยกระดับเป็น Emergency ถ้าไม่ตอบรับภายในเวลาที่กำหนด
+  /// (response-timeout escalation — ผู้ใช้อาจหมดสติ/หลับในจริง จึงไม่ตอบรับ)
+  ///
+  /// ตั้งใจแยกจาก dedup-window ของการบันทึก alert (20s) โดยสิ้นเชิง: ผูกกับสถานะ
+  /// ปัจจุบัน (currentRisk.alertLevel) ไม่ใช่ AlertRecord ตัวใดตัวหนึ่ง — เรียกทุก tick
+  /// จึงเริ่มจับเวลาแค่ครั้งเดียวตอน episode เริ่ม (ไม่ถูกรีเซ็ตทุกครั้งที่มี Warning ซ้ำ
+  /// ก่อนครบ 30 วิ ซึ่งเป็นบั๊กเดิมที่ทำให้ escalation ไม่มีทางทำงานกับ Warning ต่อเนื่องจริง)
+  void _trackWarningEscalation(RiskResult risk) {
+    if (risk.alertLevel != 'Warning') {
+      // episode จบแล้ว (กลับปกติ หรือแย่ลงเป็น Emergency เองแล้ว) → เลิกติดตาม
+      _warningTimer?.cancel();
+      _warningTimer = null;
+      return;
+    }
+    if (_warningTimer != null) return; // episode นี้กำลังถูกติดตามอยู่แล้ว — อย่ารีเซ็ต
+    _warningEpisodeAcknowledged = false;
+    _warningTimer = Timer(_warningResponseTimeout, _checkWarningEscalation);
+  }
+
+  void _checkWarningEscalation() {
+    _warningTimer = null;
+    if (_disposed) return;
+    // ตรวจกับสถานะสดตอนนี้ ไม่ใช่ตอนเริ่มจับเวลา — กันเคสที่กลับเป็นปกติไปแล้ว
+    if (currentRisk.alertLevel != 'Warning' || _warningEpisodeAcknowledged) {
+      return;
+    }
+    _escalateUnacknowledgedWarning();
+  }
+
+  Future<void> _escalateUnacknowledgedWarning() async {
+    final escalatedRisk = RiskResult(
+      riskClass: currentRisk.riskClass,
+      alertLevel: 'Emergency',
+      detectedSigns: [
+        ...currentRisk.detectedSigns,
+        'ไม่มีการตอบรับภายใน ${_warningResponseTimeout.inSeconds} วินาที',
+      ],
+      recommendation:
+          'ไม่มีการตอบรับการแจ้งเตือน — หยุดกิจกรรมทันที ตรวจสอบความปลอดภัย '
+          'หากไม่ตอบสนอง โทร 1669',
+    );
+    final escalated = AlertRecord(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      timestamp: DateTime.now(),
+      sensorData: currentSensor,
+      riskResult: escalatedRisk,
+    );
+    alerts.insert(0, escalated);
+    await _alertStorage.saveAlerts(alerts);
+    if (_disposed) return;
+    // อัปเดตสถานะปัจจุบันด้วย — ไม่งั้นหน้า Dashboard ยังโชว์ Warning เดิม
+    // ทั้งที่ประวัติแจ้งเตือนมี Emergency แล้ว (เห็นแค่ถ้าเข้าไปดู Alert History)
+    currentRisk = escalatedRisk;
+    _showAlertNotification(escalated);
+    _syncAlertToCloud(escalated);
+    notifyListeners();
+  }
+
+  /// ดึงคำแนะนำจาก LLM เมื่อสถานะเปลี่ยน (เฉพาะตอนไม่ปกติ) — โหมดให้คำแนะนำอย่างเดียว
+  Future<void> _refreshAdvice(SensorData data, RiskResult risk) async {
+    // สถานะปกติ → เคลียร์คำแนะนำ AI (ใช้ข้อความ rule-based เดิม)
+    if (risk.alertLevel == 'Safe') {
+      if (aiAdvice.isNotEmpty) {
+        aiAdvice = '';
+        aiAdviceCause = '';
+        aiAdviceDisclaimer = '';
+        _lastAdviceFor = '';
+        notifyListeners();
+      }
+      return;
+    }
+    // เรียกเฉพาะเมื่อสถานะเปลี่ยน (กันยิง LLM ซ้ำๆ) และเปิด cloud อยู่
+    if (risk.riskClass == _lastAdviceFor || cloudBaseUrl.trim().isEmpty) return;
+    _lastAdviceFor = risk.riskClass;
+
+    final sensor =
+        'HR ${data.heartRate} bpm, SpO2 ${data.spo2}%, HRV ${data.ecgHrv.toStringAsFixed(0)} ms, '
+        'GSR ${data.gsr.toStringAsFixed(0)}, Temp ${data.temperature.toStringAsFixed(1)}°C';
+    final result = await _cloudService.fetchAdvice(
+      baseUrl: cloudBaseUrl,
+      status: risk.riskClass,
+      alertLevel: risk.alertLevel,
+      sensor: sensor,
+    );
+    if (result != null && _lastAdviceFor == risk.riskClass) {
+      aiAdvice = result.advice;
+      aiAdviceCause = result.cause;
+      aiAdviceDisclaimer = result.disclaimer;
+      notifyListeners();
+    }
   }
 
   Future<void> respondToLatestAlert(String response) async {
@@ -542,6 +645,30 @@ class DozState extends ChangeNotifier {
     if (index == -1) return;
     alerts[index] = alerts[index].copyWith(userResponse: response);
     await _alertStorage.saveAlerts(alerts);
+    // ตอบรับ alert ล่าสุด (ที่แสดงอยู่) ระหว่าง episode ที่กำลังติดตาม → เลื่อนกำหนด
+    // ยกระดับออกไปอีก 30 วิ (ตัวจับเวลาใหม่จะถูกตั้งในรอบ updateSensorData ถัดไป)
+    if (alerts.isNotEmpty && id == alerts.first.id) {
+      _warningEpisodeAcknowledged = true;
+      _warningTimer?.cancel();
+      _warningTimer = null;
+    }
+    notifyListeners();
+  }
+
+  /// PDPA: ลบข้อมูลสุขภาพที่เก็บไว้ทั้งหมด (ประวัติแจ้งเตือน + log เซนเซอร์)
+  /// ไม่แตะโปรไฟล์/การตั้งค่า — แยกจาก resetSetup (logout) โดยตั้งใจ
+  Future<void> deleteAllData() async {
+    _warningTimer?.cancel();
+    _warningTimer = null;
+    _warningEpisodeAcknowledged = false;
+    alerts.clear();
+    sensorHistory.clear();
+    sensorRiskHistory.clear();
+    aiAdvice = '';
+    aiAdviceCause = '';
+    aiAdviceDisclaimer = '';
+    _lastAdviceFor = '';
+    await _alertStorage.clearAlerts();
     notifyListeners();
   }
 
@@ -993,7 +1120,9 @@ class DozState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _timer?.cancel();
+    _warningTimer?.cancel();
     _bleSubscription?.cancel();
     _bleService.dispose();
     super.dispose();

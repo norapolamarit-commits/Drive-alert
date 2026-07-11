@@ -839,8 +839,53 @@ class _PrivacySection extends StatelessWidget {
               label: const Text('Open Privacy Policy'),
             ),
           ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFEF4444),
+                side: const BorderSide(color: Color(0xFFEF4444)),
+              ),
+              onPressed: () => _confirmDeleteAllData(context, state),
+              icon: const Icon(Icons.delete_forever_outlined),
+              label: const Text('Delete all my data'),
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  Future<void> _confirmDeleteAllData(
+      BuildContext context, DozState state) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete all my data?'),
+        content: const Text(
+          'This permanently removes your alert history and sensor logs '
+          'stored on this device. Your profile and settings are not affected. '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFFEF4444)),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await state.deleteAllData();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('All stored data deleted')),
     );
   }
 }

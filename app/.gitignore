@@ -1,0 +1,66 @@
+# ============================================================
+#  Flutter app (nested under Doz/app/) — paths relative to here
+#  Root-level Doz/.gitignore is anchored to the repo root and does
+#  NOT reach into this subfolder for slash-anchored patterns, so the
+#  Flutter-specific ignores are duplicated here scoped correctly.
+# ============================================================
+
+# Misc / OS
+*.class
+*.log
+*.pyc
+.DS_Store
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IDE
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# Flutter / Dart / Pub
+**/doc/api/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+coverage/
+
+# Symbolication / obfuscation
+app.*.symbols
+app.*.map.json
+
+# Android build artifacts
+android/app/debug
+android/app/profile
+android/app/release
+android/local.properties
+android/.gradle/
+android/.kotlin/
+android/key.properties
+*.jks
+*.keystore
+
+# iOS / macOS generated
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Flutter/ephemeral/
+ios/Flutter/.last_build_id
+macos/Flutter/ephemeral/
+**/Pods/
+
+# Python backend (cloud_api/)
+__pycache__/
+*.env
+!*.env.example
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/

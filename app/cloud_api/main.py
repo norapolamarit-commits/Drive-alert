@@ -320,7 +320,7 @@ def _retrieve(query: str) -> tuple[str, list[dict[str, Any]]]:
         ans = KB[idx].get("a", "")
         if ans:
             lines.append(f"- {ans}")
-            used.append(KB[idx])
+            used.append({**KB[idx], "score": round(float(score), 3)})
     return "\n".join(lines), used
 
 
@@ -386,6 +386,137 @@ def chat(payload: CloudPayload):
         "model": "vita-gaurd-rag-fallback",
         "answer": _fallback_answer(prompt, context),
         "rag_sources": sources,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LLM โหมด "ให้คำแนะนำอย่างเดียว" (ไม่ถามตอบ) — ใช้กับหน้า Status / Alert
+# ─────────────────────────────────────────────────────────────────────────────
+# TH: ข้อความปฏิเสธความรับผิด แนบทุกคำตอบ / EN: safety disclaimer, always attached
+DISCLAIMER = (
+    "อุปกรณ์ต้นแบบเพื่อความปลอดภัย ไม่ใช่เครื่องมือแพทย์ "
+    "หากรู้สึกผิดปกติให้หยุดกิจกรรมและขอความช่วยเหลือ"
+)
+
+ADVICE_SYSTEM = (
+    "คุณคือ doz AI ผู้ช่วยด้านความปลอดภัย หน้าที่เดียวคือ 'ให้คำแนะนำการปฏิบัติตัว' "
+    "จากสถานะที่ระบบตรวจพบ\n"
+    "- ให้คำแนะนำสั้นๆ เป็นข้อๆ 2-4 ข้อ ว่าควรทำอะไรตอนนี้\n"
+    "- ห้ามถามกลับ ห้ามทักทาย ห้ามสนทนา — ให้คำแนะนำอย่างเดียว\n"
+    "- ห้ามวินิจฉัยโรค ห้ามบอกชื่อยา/ขนาดยา\n"
+    "- ภาษาไทย กระชับ เป็นมิตร ถ้าเป็นเหตุฉุกเฉินให้บอกโทร 1669 ก่อน"
+)
+
+# TH: แพตเทิร์นที่ห้ามหลุดมาในคำแนะนำ (วินิจฉัย/สั่งยา) / EN: guardrail deny patterns
+_DENY_PATTERNS = re.compile(
+    r"(คุณเป็นโรค|คุณน่าจะเป็น|วินิจฉัยว่า|you have|diagnos|"
+    r"\d+\s*(mg|มก\.?|มิลลิกรัม|เม็ด|โดส|dose))",
+    re.IGNORECASE,
+)
+
+
+def _apply_guardrails(text: str) -> str:
+    """TH: ตัดประโยควินิจฉัย/สั่งยาออก / EN: strip diagnostic or dosage lines"""
+    kept = [ln for ln in text.splitlines() if not _DENY_PATTERNS.search(ln)]
+    cleaned = "\n".join(kept).strip()
+    return cleaned or text.strip()
+
+
+def _deterministic_advice(status: str, level: str) -> str:
+    """TH: คำแนะนำสำรองตายตัวต่อสถานะ (เมื่อ LLM/เน็ตล่ม) / EN: per-state offline fallback"""
+    if "ออกซิเจน" in status:
+        return ("• หยุดกิจกรรมทันที นั่งพักในที่อากาศถ่ายเท\n"
+                "• หายใจช้าลึก แล้ววัดค่าซ้ำใน 2 นาที\n"
+                "• หากยังต่ำหรือมีอาการ โทร 1669")
+    if "หลับใน" in status or "ง่วง" in status:
+        return ("• หาที่จอด/หยุดพักในจุดปลอดภัยทันที\n"
+                "• งีบสั้น 15-20 นาที และดื่มน้ำ\n"
+                "• ยังไม่หายง่วง อย่าฝืนทำกิจกรรมต่อ")
+    if "เคลื่อนไหวผิดปกติ" in status:
+        return ("• หยุดกิจกรรมทันที อยู่ในที่ปลอดภัย\n"
+                "• ให้คนใกล้ชิดช่วยดูอาการ\n"
+                "• หากอาการไม่ดีขึ้น โทร 1669")
+    if "พัก" in status or "อ่อนล้า" in status or "เครียด" in status:
+        return ("• หยุดพัก 5-10 นาที หายใจช้าๆ\n"
+                "• ดื่มน้ำ ลดสิ่งกระตุ้น\n"
+                "• ประเมินตัวเองก่อนทำกิจกรรมต่อ")
+    if level == "Emergency":
+        return ("• หยุดกิจกรรมทันที อยู่ในที่ปลอดภัย\n"
+                "• ประเมินอาการ หากรุนแรง โทร 1669\n"
+                "• แจ้งคนใกล้ชิดให้มาช่วย")
+    return ("• เฝ้าสังเกตอาการต่อเนื่อง\n"
+            "• พักเมื่อรู้สึกล้า และดื่มน้ำสม่ำเสมอ\n"
+            "• หากผิดปกติให้ปรึกษาผู้ดูแลหรือแพทย์")
+
+
+def _call_llm(system: str, user_content: str, model: str) -> Optional[str]:
+    """เรียก LLM (Pathumma ผ่าน HF) — คืน text หรือ None ถ้าไม่พร้อม/ล้มเหลว"""
+    if not LLM_API_KEY:
+        return None
+    try:
+        resp = httpx.post(
+            f"{LLM_BASE_URL}/chat/completions",
+            headers={"Authorization": f"Bearer {LLM_API_KEY}"},
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_content},
+                ],
+                "max_tokens": 220,
+                "temperature": 0.5,
+            },
+            timeout=30.0,
+        )
+        resp.raise_for_status()
+        text = resp.json()["choices"][0]["message"]["content"].strip()
+        return text or None
+    except Exception as exc:
+        print(f"[llm] error: {exc}")
+        return None
+
+
+@app.post("/advice")
+def advice(payload: CloudPayload):
+    """รับสถานะที่ระบบตรวจพบ + ค่าเซนเซอร์ → คืน 'คำแนะนำ' จาก LLM (ไม่ถามตอบ)"""
+    data = payload.model_dump()
+    status = str(data.get("status", "")).strip()       # riskClass เช่น "เสี่ยงหลับใน"
+    level = str(data.get("alertLevel", "")).strip()
+    sensor = str(data.get("sensor", "")).strip()       # สรุปค่าเซนเซอร์ (ข้อความ)
+    model = str(data.get("model") or LLM_MODEL_DEFAULT)
+
+    context, used = _retrieve(f"{status} {sensor}")
+    sources = [
+        {"title": e.get("q", ""), "score": e.get("score", 0.0)} for e in used
+    ]
+    cause = f"สถานะที่ตรวจพบ: {status}" + (f" (ระดับ {level})" if level else "")
+
+    user_content = (
+        (f"[ความรู้อ้างอิง]\n{context}\n\n" if context else "")
+        + f"สถานะที่ระบบตรวจพบ: {status} (ระดับ {level})\n"
+        + (f"ค่าที่เกี่ยวข้อง: {sensor}\n" if sensor else "")
+        + "ให้คำแนะนำว่าควรปฏิบัติตัวอย่างไรตอนนี้"
+    )
+
+    text = _call_llm(ADVICE_SYSTEM, user_content, model)
+    if text:
+        return {
+            "mode": "rag",
+            "model": model,
+            "cause": cause,
+            "advice": _apply_guardrails(text),  # กรองวินิจฉัย/สั่งยา
+            "sources": sources,
+            "disclaimer": DISCLAIMER,
+        }
+
+    # fallback: คำแนะนำตายตัวต่อสถานะ (ทำงานได้แม้ไม่มี token/เน็ต)
+    return {
+        "mode": "fallback",
+        "model": "rule-fallback",
+        "cause": cause,
+        "advice": _deterministic_advice(status, level),
+        "sources": sources,
+        "disclaimer": DISCLAIMER,
     }
 
 

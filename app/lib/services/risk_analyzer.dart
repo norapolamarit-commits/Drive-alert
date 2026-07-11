@@ -19,7 +19,7 @@ class RiskAnalyzer {
     // เงื่อนไข > 0 กันกรณีเซนเซอร์ยังไม่มีค่า (อ่านได้ 0)
     if (current.spo2 > 0 && current.spo2 < 90) {
       return const RiskResult(
-        riskClass: 'Critical Vital Sign',
+        riskClass: 'ออกซิเจนในเลือดต่ำ ควรหยุดทันที',
         alertLevel: 'Emergency',
         detectedSigns: [
           'ค่าออกซิเจนในเลือดต่ำวิกฤต (SpO2 < 90%)',
@@ -38,7 +38,7 @@ class RiskAnalyzer {
 
     if (highGyro && _repetitiveMovement(recent)) {
       return const RiskResult(
-        riskClass: 'Seizure-like Risk',
+        riskClass: 'พบการเคลื่อนไหวผิดปกติ ควรหยุดทันที',
         alertLevel: 'Emergency',
         detectedSigns: [
           'Gyroscope แกว่งสูง',
@@ -51,7 +51,7 @@ class RiskAnalyzer {
 
     if (current.gsr > 80 && current.heartRate > 105) {
       return const RiskResult(
-        riskClass: 'Fatigue Risk',
+        riskClass: 'ควรพัก (ร่างกายอ่อนล้า/เครียด)',
         alertLevel: 'Warning',
         detectedSigns: [
           'GSR สูง',
@@ -75,7 +75,7 @@ class RiskAnalyzer {
         stressTrend > 1.2 &&
         current.motionMagnitude < 0.7) {
       return const RiskResult(
-        riskClass: 'Fatigue Risk',
+        riskClass: 'เริ่มอ่อนล้า ควรระวัง',
         alertLevel: 'Watch',
         detectedSigns: [
           'Heart Rate มีแนวโน้มผิดปกติ',
@@ -88,7 +88,7 @@ class RiskAnalyzer {
     }
 
     return const RiskResult(
-      riskClass: 'Normal',
+      riskClass: 'ปกติ',
       alertLevel: 'Safe',
       detectedSigns: [
         'Heart Rate อยู่ในช่วง 60-100',
@@ -138,7 +138,7 @@ class RiskAnalyzer {
     ];
 
     return RiskResult(
-      riskClass: 'Drowsiness Risk',
+      riskClass: severe ? 'เสี่ยงหลับใน ควรพักทันที' : 'เริ่มง่วง ควรพัก',
       alertLevel: severe ? 'Warning' : 'Watch',
       detectedSigns: signs,
       recommendation: severe

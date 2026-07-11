@@ -6,6 +6,21 @@ import '../models/alert_record.dart';
 import '../models/risk_result.dart';
 import '../models/sensor_data.dart';
 
+/// คำแนะนำจาก /advice — รวม cause + disclaimer + mode (rag/fallback) ไม่ใช่แค่ข้อความเดียว
+class AdviceResult {
+  const AdviceResult({
+    required this.advice,
+    this.cause = '',
+    this.disclaimer = '',
+    this.mode = '',
+  });
+
+  final String advice;
+  final String cause;
+  final String disclaimer;
+  final String mode;
+}
+
 class CloudService {
   CloudService({http.Client? client}) : _client = client ?? http.Client();
 
@@ -50,6 +65,44 @@ class CloudService {
         'userProfile': userProfile,
       },
     );
+  }
+
+  /// ขอ "คำแนะนำ" จาก LLM (โหมดให้คำแนะนำอย่างเดียว) — คืน null ถ้าล้มเหลว
+  Future<AdviceResult?> fetchAdvice({
+    required String baseUrl,
+    required String status,
+    required String alertLevel,
+    required String sensor,
+  }) async {
+    if (baseUrl.trim().isEmpty) return null;
+    try {
+      final normalized = baseUrl.endsWith('/')
+          ? baseUrl.substring(0, baseUrl.length - 1)
+          : baseUrl;
+      final response = await _client
+          .post(
+            Uri.parse('$normalized/advice'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'status': status,
+              'alertLevel': alertLevel,
+              'sensor': sensor,
+            }),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (response.statusCode < 200 || response.statusCode >= 300) return null;
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final advice = body['advice']?.toString().trim();
+      if (advice == null || advice.isEmpty) return null;
+      return AdviceResult(
+        advice: advice,
+        cause: body['cause']?.toString().trim() ?? '',
+        disclaimer: body['disclaimer']?.toString().trim() ?? '',
+        mode: body['mode']?.toString().trim() ?? '',
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<bool> _post({

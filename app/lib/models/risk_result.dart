@@ -11,7 +11,7 @@ class RiskResult {
   final List<String> detectedSigns;
   final String recommendation;
 
-  bool get shouldStoreAlert => alertLevel != 'Safe' || riskClass != 'Normal';
+  bool get shouldStoreAlert => alertLevel != 'Safe';
 
   int get levelValue => switch (alertLevel) {
         'Safe' => 0,

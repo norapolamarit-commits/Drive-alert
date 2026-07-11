@@ -26,7 +26,12 @@ class DashboardScreen extends StatelessWidget {
         StatusCard(
           status: risk.riskClass,
           alertLevel: risk.alertLevel,
-          recommendation: risk.recommendation,
+          // ใช้คำแนะนำจาก LLM ถ้ามี ไม่งั้นใช้ rule-based เดิม
+          recommendation:
+              state.aiAdvice.isNotEmpty ? state.aiAdvice : risk.recommendation,
+          cause: state.aiAdvice.isNotEmpty ? state.aiAdviceCause : '',
+          disclaimer:
+              state.aiAdvice.isNotEmpty ? state.aiAdviceDisclaimer : '',
         ),
         SizedBox(height: compact ? 8 : 12),
         GridView.count(

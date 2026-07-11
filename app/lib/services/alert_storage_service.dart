@@ -24,4 +24,9 @@ class AlertStorageService {
       jsonEncode(alerts.map((alert) => alert.toJson()).toList()),
     );
   }
+
+  Future<void> clearAlerts() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key);
+  }
 }
