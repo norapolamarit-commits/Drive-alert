@@ -4,13 +4,17 @@ import json
 import math
 import os
 import re
-from collections import Counter
+from collections import Counter, OrderedDict, deque
+from math import ceil
+from threading import BoundedSemaphore, Lock
+import time
 from typing import Any, Optional
+from urllib.parse import quote
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 try:
     from google.cloud import firestore
@@ -19,6 +23,18 @@ except ImportError:
 
 
 app = FastAPI(title="doz Cloud API")
+
+# Per-process abuse guard; configure a shared gateway limiter before adding replicas.
+AI_RATE_LIMIT_MAX = max(1, int(os.getenv("AI_RATE_LIMIT_MAX", "20")))
+AI_RATE_LIMIT_WINDOW_SECONDS = max(
+    1, int(os.getenv("AI_RATE_LIMIT_WINDOW_SECONDS", "60"))
+)
+AI_MAX_CONCURRENT_REQUESTS = max(
+    1, int(os.getenv("AI_MAX_CONCURRENT_REQUESTS", "2"))
+)
+_AI_REQUEST_TIMES: OrderedDict[str, deque[float]] = OrderedDict()
+_AI_RATE_LIMIT_LOCK = Lock()
+_AI_IN_FLIGHT = BoundedSemaphore(AI_MAX_CONCURRENT_REQUESTS)
 
 SENSOR_EVENTS: list[dict[str, Any]] = []
 ALERT_EVENTS: list[dict[str, Any]] = []
@@ -32,30 +48,200 @@ class CloudPayload(BaseModel):
         extra = "allow"
 
 
+class ChatRequest(BaseModel):
+    # Ignore client-only fields (including its requested model); the server owns
+    # provider/model selection and bounds user-controlled content before billing.
+    model_config = ConfigDict(extra="ignore")
+
+    question: str = Field(min_length=1, max_length=2000)
+    prompt: str = Field(min_length=1, max_length=10000)
+
+
+class AdviceRequest(BaseModel):
+    # Keep the advice payload bounded and prevent clients from selecting a provider model.
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    status: str = Field(min_length=1, max_length=80)
+    alert_level: str = Field(default="", alias="alertLevel", max_length=40)
+    sensor: str = Field(default="", max_length=2000)
+
+
+def _verify_chat_user(authorization: Optional[str]) -> str:
+    """Validate a Supabase access token; fail closed if auth is unavailable."""
+    supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    supabase_key = os.getenv("SUPABASE_PUBLISHABLE_KEY") or os.getenv(
+        "SUPABASE_ANON_KEY", ""
+    )
+    if not supabase_url or not supabase_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Chat authentication is not configured on this server.",
+        )
+    scheme, _, token = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise HTTPException(status_code=401, detail="Bearer access token required.")
+    try:
+        response = httpx.get(
+            f"{supabase_url}/auth/v1/user",
+            headers={
+                "apikey": supabase_key,
+                "Authorization": f"Bearer {token.strip()}",
+            },
+            timeout=5.0,
+        )
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=503, detail="Authentication provider is unavailable."
+        ) from exc
+    if response.status_code in (401, 403):
+        raise HTTPException(status_code=401, detail="Invalid or expired token.")
+    if response.status_code < 200 or response.status_code >= 300:
+        raise HTTPException(status_code=503, detail="Could not verify access token.")
+    try:
+        user_id = response.json().get("id")
+    except (ValueError, AttributeError):
+        user_id = None
+    if not isinstance(user_id, str) or not user_id:
+        raise HTTPException(status_code=401, detail="Invalid user identity.")
+    return user_id
+
+
+def _require_health_data_sync_enabled() -> None:
+    """Keep health-data routes closed until deployment review explicitly enables them."""
+    enabled = os.getenv("HEALTH_DATA_SYNC_ENABLED", "false").strip().lower()
+    if enabled not in {"1", "true", "yes"}:
+        raise HTTPException(
+            status_code=503,
+            detail="Health-data sync is disabled on this deployment.",
+        )
+
+
+def _enforce_ai_rate_limit(user_id: str, *, now: Optional[float] = None) -> None:
+    """Limit verified accounts per process; return HTTP 429 with retry guidance."""
+    current = time.monotonic() if now is None else now
+    cutoff = current - AI_RATE_LIMIT_WINDOW_SECONDS
+    with _AI_RATE_LIMIT_LOCK:
+        # Expire this account's timestamps before checking the current window.
+        requests = _AI_REQUEST_TIMES.get(user_id)
+        if requests is None:
+            # Reclaim expired identities and cap memory used by authenticated IDs.
+            if len(_AI_REQUEST_TIMES) >= 10_000:
+                for old_user_id, old_requests in list(_AI_REQUEST_TIMES.items()):
+                    if not old_requests or old_requests[-1] <= cutoff:
+                        _AI_REQUEST_TIMES.pop(old_user_id, None)
+                        if len(_AI_REQUEST_TIMES) < 10_000:
+                            break
+            if len(_AI_REQUEST_TIMES) >= 10_000:
+                raise HTTPException(
+                    status_code=503,
+                    detail="AI rate-limit capacity is temporarily full.",
+                    headers={"Retry-After": str(AI_RATE_LIMIT_WINDOW_SECONDS)},
+                )
+            requests = deque()
+            _AI_REQUEST_TIMES[user_id] = requests
+        while requests and requests[0] <= cutoff:
+            requests.popleft()
+        if len(requests) >= AI_RATE_LIMIT_MAX:
+            retry_after = max(
+                1, ceil(AI_RATE_LIMIT_WINDOW_SECONDS - (current - requests[0]))
+            )
+            raise HTTPException(
+                status_code=429,
+                detail="AI request limit reached. Please wait before retrying.",
+                headers={"Retry-After": str(retry_after)},
+            )
+        requests.append(current)
+        _AI_REQUEST_TIMES.move_to_end(user_id)
+
+
 @app.get("/health")
 def health():
-    return {
-        "status": "ok",
-        "sensor_events": len(SENSOR_EVENTS),
-        "alert_events": len(ALERT_EVENTS),
-        "storage": "firestore" if _FIRESTORE_CLIENT else "memory",
-    }
+    # Public liveness checks must not disclose health-event counts or storage details.
+    return {"status": "ok"}
+
+
+@app.delete("/account", status_code=204)
+def delete_account(authorization: Optional[str] = Header(default=None)):
+    """Delete only the authenticated user's records and Supabase Auth account."""
+    user_id = _verify_chat_user(authorization)
+    supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    if not supabase_url or not service_role_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Account deletion is not configured on this server.",
+        )
+
+    # Health events are keyed by the verified user ID in Firestore subcollections.
+    if _FIRESTORE_CLIENT:
+        try:
+            for collection in ("sensor_events", "alert_events"):
+                root = _FIRESTORE_CLIENT.collection(
+                    f"{FIRESTORE_COLLECTION_PREFIX}_{collection}"
+                ).document(user_id)
+                for device_collection in root.collections():
+                    for event_document in device_collection.stream():
+                        event_document.reference.delete()
+                root.delete()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="Could not remove account data from persistent storage.",
+            ) from exc
+
+    # Remove in-process records before deleting identity; retry remains safe.
+    SENSOR_EVENTS[:] = [e for e in SENSOR_EVENTS if e.get("authUserId") != user_id]
+    ALERT_EVENTS[:] = [e for e in ALERT_EVENTS if e.get("authUserId") != user_id]
+    try:
+        response = httpx.delete(
+            f"{supabase_url}/auth/v1/admin/users/{quote(user_id, safe='')}",
+            headers={
+                "apikey": service_role_key,
+                "Authorization": f"Bearer {service_role_key}",
+            },
+            timeout=10.0,
+        )
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=503, detail="Account provider is unavailable."
+        ) from exc
+    if response.status_code < 200 or response.status_code >= 300:
+        raise HTTPException(
+            status_code=503, detail="Account provider did not confirm deletion."
+        )
+    return None
 
 
 @app.get("/sensor")
-def sensor_events(limit: int = 100):
-    return SENSOR_EVENTS[-limit:]
+def sensor_events(
+    limit: int = Query(default=100, ge=1, le=500),
+    authorization: Optional[str] = Header(default=None),
+):
+    user_id = _verify_chat_user(authorization)
+    _require_health_data_sync_enabled()
+    events = [event for event in SENSOR_EVENTS if event.get("authUserId") == user_id]
+    return events[-limit:]
 
 
 @app.get("/alert")
-def alert_events(limit: int = 100):
-    return ALERT_EVENTS[-limit:]
+def alert_events(
+    limit: int = Query(default=100, ge=1, le=500),
+    authorization: Optional[str] = Header(default=None),
+):
+    user_id = _verify_chat_user(authorization)
+    _require_health_data_sync_enabled()
+    events = [event for event in ALERT_EVENTS if event.get("authUserId") == user_id]
+    return events[-limit:]
 
 
 @app.get("/devices")
-def devices():
+def devices(authorization: Optional[str] = Header(default=None)):
+    user_id = _verify_chat_user(authorization)
+    _require_health_data_sync_enabled()
     latest: dict[str, dict[str, Any]] = {}
     for event in SENSOR_EVENTS:
+        if event.get("authUserId") != user_id:
+            continue
         profile = event.get("userProfile") or {}
         device_id = str(profile.get("deviceId") or "unknown-device")
         latest[device_id] = event
@@ -64,9 +250,8 @@ def devices():
 
 def _is_local_request(request: Request) -> bool:
     client_host = request.client.host if request.client else ""
-    forwarded_for = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-    host = forwarded_for or client_host
-    return host in {"127.0.0.1", "::1", "localhost"}
+    # Never trust client-controlled X-Forwarded-For to authorize local dashboards.
+    return client_host in {"127.0.0.1", "::1", "localhost", "testclient"}
 
 
 def _local_only_response() -> HTMLResponse:
@@ -210,11 +395,22 @@ def local_dashboard(request: Request):
 
 
 @app.post("/sensor")
-def sensor(payload: CloudPayload):
+def sensor(
+    payload: CloudPayload,
+    authorization: Optional[str] = Header(default=None),
+):
+    user_id = _verify_chat_user(authorization)
+    _require_health_data_sync_enabled()
     event = payload.model_dump()
     errors = _validate_sensor_event(event)
     if errors:
         raise HTTPException(status_code=422, detail={"errors": errors})
+    profile = event.get("userProfile")
+    if not isinstance(profile, dict):
+        profile = {}
+    profile["userId"] = user_id
+    event["userProfile"] = profile
+    event["authUserId"] = user_id
     event["receivedAt"] = datetime.utcnow().isoformat()
     SENSOR_EVENTS.append(event)
     _write_firestore("sensor_events", event)
@@ -222,8 +418,19 @@ def sensor(payload: CloudPayload):
 
 
 @app.post("/alert")
-def alert(payload: CloudPayload):
+def alert(
+    payload: CloudPayload,
+    authorization: Optional[str] = Header(default=None),
+):
+    user_id = _verify_chat_user(authorization)
+    _require_health_data_sync_enabled()
     event = payload.model_dump()
+    profile = event.get("userProfile")
+    if not isinstance(profile, dict):
+        profile = {}
+    profile["userId"] = user_id
+    event["userProfile"] = profile
+    event["authUserId"] = user_id
     event["receivedAt"] = datetime.utcnow().isoformat()
     ALERT_EVENTS.append(event)
     _write_firestore("alert_events", event)
@@ -340,11 +547,29 @@ def _fallback_answer(prompt: str, context: str) -> str:
 
 
 @app.post("/chat")
-def chat(payload: CloudPayload):
-    data = payload.model_dump()
-    prompt = str(data.get("prompt", ""))
-    model = str(data.get("model") or LLM_MODEL_DEFAULT)
-    question = _extract_question(prompt, str(data.get("question", "")))
+def chat(
+    payload: ChatRequest,
+    authorization: Optional[str] = Header(default=None),
+):
+    user_id = _verify_chat_user(authorization)
+    _enforce_ai_rate_limit(user_id)
+    if not _AI_IN_FLIGHT.acquire(blocking=False):
+        raise HTTPException(
+            status_code=503,
+            detail="Chat service is busy. Please retry shortly.",
+            headers={"Retry-After": "2"},
+        )
+    try:
+        return _generate_chat_reply(payload)
+    finally:
+        _AI_IN_FLIGHT.release()
+
+
+def _generate_chat_reply(payload: ChatRequest) -> dict[str, Any]:
+    # All account identity and resource gates run in `chat` before reaching this function.
+    prompt = payload.prompt
+    question = _extract_question(prompt, payload.question)
+    model = LLM_MODEL_DEFAULT
 
     # [1+2] RAG retrieve ความรู้ที่เกี่ยวข้อง
     context, used = _retrieve(question)
@@ -377,12 +602,19 @@ def chat(payload: CloudPayload):
             resp.raise_for_status()
             answer = resp.json()["choices"][0]["message"]["content"].strip()
             if answer:
-                return {"model": model, "answer": answer, "rag_sources": sources}
+                return {
+                    "mode": "llm",
+                    "model": model,
+                    "answer": answer,
+                    "rag_sources": sources,
+                }
         except Exception as exc:  # LLM ล่ม/ไม่ได้ตั้ง token → ใช้ fallback
-            print(f"[chat] LLM error, falling back: {exc}")
+            # Do not log request/provider exception text; it can contain user data.
+            print(f"[chat] LLM request failed ({type(exc).__name__}); using fallback")
 
     # fallback: ตอบจากความรู้ที่ดึงมา (ยังทำงานได้แม้ไม่มี token)
     return {
+        "mode": "fallback",
         "model": "vita-gaurd-rag-fallback",
         "answer": _fallback_answer(prompt, context),
         "rag_sources": sources,
@@ -472,18 +704,39 @@ def _call_llm(system: str, user_content: str, model: str) -> Optional[str]:
         text = resp.json()["choices"][0]["message"]["content"].strip()
         return text or None
     except Exception as exc:
-        print(f"[llm] error: {exc}")
+        # Never log provider exception text; it can include request or endpoint details.
+        print(f"[llm] request failed ({type(exc).__name__})")
         return None
 
 
 @app.post("/advice")
-def advice(payload: CloudPayload):
+def advice(
+    payload: AdviceRequest,
+    authorization: Optional[str] = Header(default=None),
+):
     """รับสถานะที่ระบบตรวจพบ + ค่าเซนเซอร์ → คืน 'คำแนะนำ' จาก LLM (ไม่ถามตอบ)"""
-    data = payload.model_dump()
-    status = str(data.get("status", "")).strip()       # riskClass เช่น "เสี่ยงหลับใน"
-    level = str(data.get("alertLevel", "")).strip()
-    sensor = str(data.get("sensor", "")).strip()       # สรุปค่าเซนเซอร์ (ข้อความ)
-    model = str(data.get("model") or LLM_MODEL_DEFAULT)
+    user_id = _verify_chat_user(authorization)
+    _enforce_ai_rate_limit(user_id)
+    if not _AI_IN_FLIGHT.acquire(blocking=False):
+        raise HTTPException(
+            status_code=503,
+            detail="AI service is busy. Please retry shortly.",
+            headers={"Retry-After": "2"},
+        )
+    try:
+        return _generate_advice(payload)
+    finally:
+        _AI_IN_FLIGHT.release()
+
+
+def _generate_advice(payload: AdviceRequest) -> dict[str, Any]:
+    """Generate advice after shared auth, rate and concurrency guards pass."""
+    status = payload.status.strip()  # riskClass เช่น "เสี่ยงหลับใน"
+    level = payload.alert_level.strip()
+    sensor = payload.sensor.strip()  # สรุปค่าเซนเซอร์ (ข้อความ)
+    if not status:
+        raise HTTPException(status_code=422, detail="status must not be blank.")
+    model = LLM_MODEL_DEFAULT
 
     context, used = _retrieve(f"{status} {sensor}")
     sources = [

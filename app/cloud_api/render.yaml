@@ -1,11 +1,25 @@
 services:
   - type: web
     name: vita-gaurd-cloud-api
-    env: python
+    runtime: python
     plan: free
+    # The Git repository root is Doz/; API source and this blueprint live here.
+    rootDir: app/cloud_api
     buildCommand: "python -m pip install -r requirements.txt"
     startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health
     envVars:
+      # Keep the cloud runtime aligned with local API development.
+      - key: PYTHON_VERSION
+        value: "3.11.16"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: HEALTH_DATA_SYNC_ENABLED
+        value: "false"
       # HuggingFace access token (router) สำหรับเรียก Pathumma LLM — ตั้งค่าใน Render dashboard
       - key: LLM_API_KEY
         sync: false
