@@ -28,6 +28,42 @@ class SupabaseChatAuthTests(unittest.TestCase):
     def tearDown(self):
         self.env.stop()
 
+    def test_environment_numeric_settings_are_bounded_and_reject_nonfinite_values(self):
+        # EN: Missing settings use defaults, while malformed/out-of-range values fail fast.
+        # TH: ถ้าไม่ตั้งค่าให้ใช้ default แต่ค่าผิดรูปแบบ/นอกช่วงต้องหยุดอย่างชัดเจน
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(main._bounded_env_int("LIMIT", 5, 1, 10), 5)
+            self.assertEqual(main._bounded_env_float("SCORE", 0.5, 0.0, 1.0), 0.5)
+
+        for bad_int in ("not-an-int", "0", "11"):
+            with self.subTest(bad_int=bad_int):
+                with patch.dict(os.environ, {"LIMIT": bad_int}, clear=True):
+                    with self.assertRaisesRegex(ValueError, "LIMIT"):
+                        main._bounded_env_int("LIMIT", 5, 1, 10)
+
+        for bad_float in ("nan", "inf", "-0.1", "1.1", "invalid"):
+            with self.subTest(bad_float=bad_float):
+                with patch.dict(os.environ, {"SCORE": bad_float}, clear=True):
+                    with self.assertRaisesRegex(ValueError, "SCORE"):
+                        main._bounded_env_float("SCORE", 0.5, 0.0, 1.0)
+
+    def test_advice_guardrails_fail_closed_when_all_lines_are_unsafe(self):
+        unsafe = "คุณเป็นโรคหัวใจ\nรับประทานยา 20 mg"
+
+        result = main._apply_guardrails(unsafe)
+
+        self.assertNotEqual(result, unsafe)
+        self.assertNotIn("โรคหัวใจ", result)
+        self.assertNotIn("20 mg", result)
+        self.assertIn("ไม่สามารถให้คำแนะนำ", result)
+
+    def test_advice_guardrails_keep_safe_lines_and_remove_unsafe_lines(self):
+        mixed = "คุณเป็นโรคหัวใจ\nหยุดกิจกรรมและพักในที่ปลอดภัย"
+
+        result = main._apply_guardrails(mixed)
+
+        self.assertEqual(result, "หยุดกิจกรรมและพักในที่ปลอดภัย")
+
     def test_valid_bearer_returns_supabase_user_id(self):
         request = httpx.Request("GET", "https://project.example.supabase.co/auth/v1/user")
         response = httpx.Response(200, json={"id": "user-123"}, request=request)
@@ -339,12 +375,240 @@ class SupabaseChatAuthTests(unittest.TestCase):
         self.assertEqual(main.SENSOR_EVENTS, [])
         self.assertEqual(main.ALERT_EVENTS, [])
 
+    def test_health_data_sync_requires_firestore_or_explicit_memory_opt_in(self):
+        with patch("main._FIRESTORE_CLIENT", None):
+            with patch.dict(
+                os.environ,
+                {
+                    "HEALTH_DATA_SYNC_ENABLED": "true",
+                    "HEALTH_DATA_MEMORY_STORAGE_ENABLED": "false",
+                },
+            ):
+                with self.assertRaises(HTTPException) as error:
+                    main._require_health_data_sync_enabled()
+
+        self.assertEqual(error.exception.status_code, 503)
+        self.assertIn("Persistent health-data storage", error.exception.detail)
+        with patch("main._FIRESTORE_CLIENT", None):
+            with patch.dict(
+                os.environ,
+                {
+                    "HEALTH_DATA_SYNC_ENABLED": "true",
+                    "HEALTH_DATA_MEMORY_STORAGE_ENABLED": "true",
+                },
+            ):
+                main._require_health_data_sync_enabled()
+
+    def test_firestore_failure_does_not_claim_success_or_keep_memory_copy(self):
+        client = TestClient(main.app)
+        firestore_client = unittest.mock.MagicMock()
+        user_document = firestore_client.collection.return_value.document.return_value
+        root_snapshot = unittest.mock.MagicMock(exists=True)
+        root_snapshot.to_dict.return_value = {"device_ids": ["device-test"]}
+        user_document.get.return_value = root_snapshot
+        transaction = firestore_client.transaction.return_value
+        transaction.set.side_effect = RuntimeError("private firestore details")
+        with patch("main._verify_chat_user", return_value="user-123"):
+            with patch("main._FIRESTORE_CLIENT", firestore_client):
+                with patch("main.firestore.transactional", side_effect=lambda fn: fn):
+                    with patch.dict(
+                        os.environ,
+                        {
+                            "HEALTH_DATA_SYNC_ENABLED": "true",
+                            "HEALTH_DATA_MEMORY_STORAGE_ENABLED": "false",
+                        },
+                    ):
+                        response = client.post(
+                            "/alert",
+                            headers={"Authorization": "Bearer valid-token"},
+                            json={
+                                "alert": {"id": "alert-test"},
+                                "userProfile": {"deviceId": "device-test"},
+                            },
+                        )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertNotIn("private firestore details", response.text)
+        self.assertEqual(main.ALERT_EVENTS, [])
+
+    def test_firestore_reader_merges_latest_events_and_filters_user_id(self):
+        client = unittest.mock.MagicMock()
+        user_document = client.collection.return_value.document.return_value
+        device_a = unittest.mock.MagicMock()
+        device_b = unittest.mock.MagicMock()
+        user_document.collections.return_value = [device_a, device_b]
+        snapshots = [
+            unittest.mock.MagicMock(
+                id="doc-a",
+                to_dict=unittest.mock.Mock(
+                    return_value={"authUserId": "user-123", "receivedAt": "2026-01-01T00:00:01"}
+                ),
+            ),
+            unittest.mock.MagicMock(
+                id="doc-other-user",
+                to_dict=unittest.mock.Mock(
+                    return_value={"authUserId": "other-user", "receivedAt": "2026-01-01T00:00:03"}
+                ),
+            ),
+            unittest.mock.MagicMock(
+                id="doc-b",
+                to_dict=unittest.mock.Mock(
+                    return_value={"authUserId": "user-123", "receivedAt": "2026-01-01T00:00:02"}
+                ),
+            ),
+        ]
+        device_a.order_by.return_value.limit.return_value.stream.return_value = snapshots[:2]
+        device_b.order_by.return_value.limit.return_value.stream.return_value = snapshots[2:]
+
+        with patch("main._FIRESTORE_CLIENT", client):
+            events = main._read_firestore_events("sensor_events", "user-123", 10)
+
+        self.assertEqual([event["receivedAt"] for event in events], [
+            "2026-01-01T00:00:01",
+            "2026-01-01T00:00:02",
+        ])
+        device_a.order_by.assert_called_once_with(
+            "__name__", direction=main.firestore.Query.DESCENDING
+        )
+
+    def test_firestore_reader_fails_closed_over_device_collection_limit(self):
+        client = unittest.mock.MagicMock()
+        user_document = client.collection.return_value.document.return_value
+        user_document.collections.return_value = [
+            unittest.mock.MagicMock() for _ in range(main.MAX_FIRESTORE_DEVICES_PER_USER + 1)
+        ]
+
+        with patch("main._FIRESTORE_CLIENT", client):
+            with self.assertRaises(HTTPException) as error:
+                main._read_firestore_events("sensor_events", "user-123", 10)
+
+        self.assertEqual(error.exception.status_code, 503)
+        self.assertIn("read limit", error.exception.detail)
+
+    def test_firestore_writer_rejects_new_device_when_account_limit_reached(self):
+        client = unittest.mock.MagicMock()
+        user_document = unittest.mock.MagicMock()
+        event_document = unittest.mock.MagicMock()
+        transaction = client.transaction.return_value
+        snapshot = unittest.mock.MagicMock(exists=True)
+        snapshot.get.return_value = [
+            f"device-{index}" for index in range(main.MAX_FIRESTORE_DEVICES_PER_USER)
+        ]
+        user_document.get.return_value = snapshot
+
+        with patch("main._FIRESTORE_CLIENT", client):
+            with patch("main.firestore.transactional", side_effect=lambda fn: fn):
+                with self.assertRaises(HTTPException) as error:
+                    main._persist_firestore_event(
+                        user_document,
+                        event_document,
+                        "new-device",
+                        {"authUserId": "user-123"},
+                        set(),
+                    )
+
+        self.assertEqual(error.exception.status_code, 429)
+        transaction.set.assert_not_called()
+
+    def test_firestore_writer_atomically_registers_device_and_event(self):
+        client = unittest.mock.MagicMock()
+        user_document = unittest.mock.MagicMock()
+        event_document = unittest.mock.MagicMock()
+        transaction = client.transaction.return_value
+        snapshot = unittest.mock.MagicMock(exists=True)
+        snapshot.get.return_value = ["existing-device"]
+        user_document.get.return_value = snapshot
+        event = {"authUserId": "user-123", "value": 1}
+
+        with patch("main._FIRESTORE_CLIENT", client):
+            with patch("main.firestore.transactional", side_effect=lambda fn: fn):
+                main._persist_firestore_event(
+                    user_document,
+                    event_document,
+                    "new-device",
+                    event,
+                    set(),
+                )
+
+        self.assertEqual(transaction.set.call_count, 2)
+        transaction.set.assert_any_call(
+            user_document,
+            {"device_ids": ["existing-device", "new-device"]},
+            merge=True,
+        )
+        transaction.set.assert_any_call(event_document, event)
+
+    def test_sensor_route_rejects_non_object_sensor_data_without_server_error(self):
+        client = TestClient(main.app)
+        with patch("main._verify_chat_user", return_value="user-123"):
+            with patch.dict(
+                os.environ,
+                {
+                    "HEALTH_DATA_SYNC_ENABLED": "true",
+                    "HEALTH_DATA_MEMORY_STORAGE_ENABLED": "true",
+                },
+            ):
+                with patch("main._write_firestore") as write_firestore:
+                    response = client.post(
+                        "/sensor",
+                        headers={"Authorization": "Bearer valid-token"},
+                        json={
+                            "sensorData": [1, 2, 3],
+                            "userProfile": {"deviceId": "test-device"},
+                        },
+                    )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("sensorData must be an object", response.text)
+        self.assertEqual(main.SENSOR_EVENTS, [])
+        write_firestore.assert_not_called()
+
+    def test_sensor_validation_rejects_nonfinite_and_boolean_values(self):
+        self.assertIsNone(main._number(float("nan")))
+        self.assertIsNone(main._number(float("inf")))
+        self.assertIsNone(main._number(True))
+
+    def test_alert_route_rejects_firestore_path_injection_in_device_id(self):
+        client = TestClient(main.app)
+        with patch("main._verify_chat_user", return_value="user-123"):
+            with patch.dict(
+                os.environ,
+                {
+                    "HEALTH_DATA_SYNC_ENABLED": "true",
+                    "HEALTH_DATA_MEMORY_STORAGE_ENABLED": "true",
+                },
+            ):
+                with patch("main._write_firestore") as write_firestore:
+                    response = client.post(
+                        "/alert",
+                        headers={"Authorization": "Bearer valid-token"},
+                        json={
+                            "alert": {"id": "sample"},
+                            "userProfile": {"deviceId": "device/../other"},
+                        },
+                    )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("deviceId has an invalid format", response.text)
+        self.assertEqual(main.ALERT_EVENTS, [])
+        write_firestore.assert_not_called()
+
     def test_public_health_check_does_not_disclose_event_counts_or_storage(self):
         client = TestClient(main.app)
         response = client.get("/health")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok"})
+
+    def test_public_root_returns_minimal_service_status(self):
+        client = TestClient(main.app)
+        response = client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {"service": "doz Cloud API", "status": "ok", "health": "/health"},
+        )
 
     def test_account_deletion_requires_authentication(self):
         response = TestClient(main.app).delete("/account")
@@ -383,7 +647,10 @@ class SupabaseChatAuthTests(unittest.TestCase):
         with patch("main._verify_chat_user", return_value="user-123"):
             with patch.dict(
                 os.environ,
-                {"SUPABASE_SERVICE_ROLE_KEY": "server-only-test-key"},
+                {
+                    "SUPABASE_SERVICE_ROLE_KEY": "server-only-test-key",
+                    "HEALTH_DATA_MEMORY_STORAGE_ENABLED": "true",
+                },
             ):
                 with patch("main.httpx.delete", return_value=admin_response) as delete:
                     response = client.delete(
@@ -400,6 +667,26 @@ class SupabaseChatAuthTests(unittest.TestCase):
         self.assertEqual(main.SENSOR_EVENTS, [{"authUserId": "user-456", "id": "other"}])
         self.assertEqual(main.ALERT_EVENTS, [{"authUserId": "user-456", "id": "other-alert"}])
 
+    def test_account_deletion_does_not_delete_identity_when_storage_is_unavailable(self):
+        with patch("main._verify_chat_user", return_value="user-123"):
+            with patch("main._FIRESTORE_CLIENT", None):
+                with patch.dict(
+                    os.environ,
+                    {
+                        "SUPABASE_SERVICE_ROLE_KEY": "server-only-test-key",
+                        "HEALTH_DATA_MEMORY_STORAGE_ENABLED": "false",
+                    },
+                ):
+                    with patch("main.httpx.delete") as delete:
+                        response = TestClient(main.app).delete(
+                            "/account",
+                            headers={"Authorization": "Bearer valid-token"},
+                        )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("Persistent health-data storage", response.text)
+        delete.assert_not_called()
+
     def test_alert_events_are_bound_to_verified_account(self):
         client = TestClient(main.app)
 
@@ -407,16 +694,28 @@ class SupabaseChatAuthTests(unittest.TestCase):
             return (authorization or "").removeprefix("Bearer ")
 
         with patch("main._verify_chat_user", side_effect=verified_user):
-            with patch.dict(os.environ, {"HEALTH_DATA_SYNC_ENABLED": "true"}):
-                client.post(
+            with patch.dict(
+                os.environ,
+                {
+                    "HEALTH_DATA_SYNC_ENABLED": "true",
+                    "HEALTH_DATA_MEMORY_STORAGE_ENABLED": "true",
+                },
+            ):
+                upload_response = client.post(
                     "/alert",
                     headers={"Authorization": "Bearer user-a"},
-                    json={"alert": {"id": "a1"}, "userProfile": {"userId": "victim"}},
+                    json={
+                        "alert": {"id": "a1"},
+                        "userProfile": {"userId": "victim", "deviceId": "device-a"},
+                    },
                 )
                 client.post(
                     "/alert",
                     headers={"Authorization": "Bearer user-b"},
-                    json={"alert": {"id": "b1"}, "userProfile": {"userId": "victim"}},
+                    json={
+                        "alert": {"id": "b1"},
+                        "userProfile": {"userId": "victim", "deviceId": "device-b"},
+                    },
                 )
                 user_a_events = client.get(
                     "/alert", headers={"Authorization": "Bearer user-a"}
@@ -425,10 +724,50 @@ class SupabaseChatAuthTests(unittest.TestCase):
                     "/alert", headers={"Authorization": "Bearer user-b"}
                 ).json()
 
+        self.assertEqual(upload_response.status_code, 200)
+        self.assertEqual(upload_response.json()["storage"], "memory-ephemeral")
         self.assertEqual(len(user_a_events), 1)
         self.assertEqual(len(user_b_events), 1)
         self.assertEqual(user_a_events[0]["userProfile"]["userId"], "user-a")
         self.assertEqual(user_b_events[0]["userProfile"]["userId"], "user-b")
+
+    def test_sensor_and_alert_uploads_reject_oversized_bodies_before_auth(self):
+        client = TestClient(main.app)
+        oversized_body = b"x" * (main.MAX_CLOUD_EVENT_BYTES + 1)
+        for path in ("/sensor", "/alert"):
+            with self.subTest(path=path):
+                with patch("main._verify_chat_user") as verify:
+                    response = client.post(
+                        path,
+                        content=oversized_body,
+                        headers={"Content-Type": "application/json"},
+                    )
+
+                self.assertEqual(response.status_code, 413)
+                verify.assert_not_called()
+
+    def test_event_history_helper_keeps_only_latest_configured_limit(self):
+        events = []
+        with patch("main.MAX_IN_MEMORY_EVENTS", 2):
+            for event_id in range(3):
+                main._append_bounded_event(events, {"id": event_id})
+
+        self.assertEqual(events, [{"id": 1}, {"id": 2}])
+
+    def test_ai_routes_reject_oversized_request_bodies_before_auth(self):
+        client = TestClient(main.app)
+        oversized_body = b"x" * (main.MAX_AI_REQUEST_BYTES + 1)
+        for path in ("/chat", "/advice"):
+            with self.subTest(path=path):
+                with patch("main._verify_chat_user") as verify:
+                    response = client.post(
+                        path,
+                        content=oversized_body,
+                        headers={"Content-Type": "application/json"},
+                    )
+
+                self.assertEqual(response.status_code, 413)
+                verify.assert_not_called()
 
 
 if __name__ == "__main__":

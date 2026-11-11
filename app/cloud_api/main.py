@@ -13,7 +13,7 @@ from urllib.parse import quote
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 try:
@@ -24,13 +24,99 @@ except ImportError:
 
 app = FastAPI(title="doz Cloud API")
 
+# EN: Bound incoming event bodies and per-worker in-memory history against RAM exhaustion.
+# TH: จำกัด body event และประวัติใน RAM ของแต่ละ worker เพื่อป้องกันใช้หน่วยความจำจนหมด
+MAX_CLOUD_EVENT_BYTES = 32 * 1024
+MAX_AI_REQUEST_BYTES = 64 * 1024
+MAX_IN_MEMORY_EVENTS = 1_000
+MAX_FIRESTORE_DEVICES_PER_USER = 16
+
+
+def _bounded_env_int(name: str, default: int, minimum: int, maximum: int) -> int:
+    """Read a bounded integer setting. / อ่านจำนวนเต็มตามช่วงที่กำหนด"""
+    # EN: Read the optional setting. TH: อ่านค่าที่ตั้งผ่าน environment
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default  # EN: Use default. TH: ใช้ค่าเริ่มต้น
+    try:
+        value = int(raw_value)  # EN: Parse integer. TH: แปลงเป็นจำนวนเต็ม
+    except (TypeError, ValueError) as exc:
+        # EN: Name the invalid setting without echoing its value. TH: แจ้งชื่อค่าโดยไม่แสดงค่าจริง
+        raise ValueError(
+            f"{name} must be an integer in {minimum}..{maximum}."
+        ) from exc
+    if not minimum <= value <= maximum:
+        # EN: Reject out-of-range values. TH: ปฏิเสธค่านอกช่วง
+        raise ValueError(f"{name} must be an integer in {minimum}..{maximum}.")
+    return value  # EN: Return validated value. TH: คืนค่าที่ผ่านการตรวจ
+
+
+def _bounded_env_float(
+    name: str, default: float, minimum: float, maximum: float
+) -> float:
+    """Read a finite bounded float. / อ่านทศนิยม finite ที่อยู่ในช่วงกำหนด"""
+    # EN: Read the optional setting. TH: อ่านค่าจาก environment
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default  # EN: Use default. TH: ใช้ค่าเริ่มต้น
+    try:
+        value = float(raw_value)  # EN: Parse float. TH: แปลงเป็นทศนิยม
+    except (TypeError, ValueError) as exc:
+        # EN: Do not echo configuration contents. TH: ไม่แสดงเนื้อหาของค่าตั้งต้นที่ผิด
+        raise ValueError(
+            f"{name} must be a finite number in {minimum}..{maximum}."
+        ) from exc
+    if not math.isfinite(value) or not minimum <= value <= maximum:
+        # EN: Reject NaN, infinity, and out-of-range values. TH: ปฏิเสธ NaN, infinity และค่านอกช่วง
+        raise ValueError(f"{name} must be a finite number in {minimum}..{maximum}.")
+    return value  # EN: Return validated value. TH: คืนค่าที่ผ่านการตรวจ
+
+
+@app.middleware("http")
+async def limit_cloud_event_body(request: Request, call_next):
+    # EN: Bound JSON request bytes before FastAPI parses event/chat/advice bodies.
+    # TH: จำกัดขนาด JSON ก่อน FastAPI parse body ของ event/chat/advice
+    body_limits = {
+        "/sensor": MAX_CLOUD_EVENT_BYTES,
+        "/alert": MAX_CLOUD_EVENT_BYTES,
+        "/chat": MAX_AI_REQUEST_BYTES,
+        "/advice": MAX_AI_REQUEST_BYTES,
+    }
+    body_limit = body_limits.get(request.url.path)
+    if request.method == "POST" and body_limit is not None:
+        raw_length = request.headers.get("content-length")
+        if raw_length is None:
+            return JSONResponse(
+                status_code=411,
+                content={"detail": "Content-Length is required for this request."},
+            )
+        try:
+            body_length = int(raw_length)
+        except ValueError:
+            return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length."})
+        if body_length < 0 or body_length > body_limit:
+            return JSONResponse(
+                status_code=413,
+                content={"detail": "Request body exceeds the endpoint size limit."},
+            )
+    return await call_next(request)
+
+
+def _append_bounded_event(events: list[dict[str, Any]], event: dict[str, Any]) -> None:
+    """Keep only the newest bounded in-process event history. / เก็บ event ล่าสุดใน RAM ตามเพดาน"""
+    if len(events) >= MAX_IN_MEMORY_EVENTS:
+        del events[: len(events) - MAX_IN_MEMORY_EVENTS + 1]
+    events.append(event)
+
 # Per-process abuse guard; configure a shared gateway limiter before adding replicas.
-AI_RATE_LIMIT_MAX = max(1, int(os.getenv("AI_RATE_LIMIT_MAX", "20")))
-AI_RATE_LIMIT_WINDOW_SECONDS = max(
-    1, int(os.getenv("AI_RATE_LIMIT_WINDOW_SECONDS", "60"))
+# EN/TH: Cap per-user AI requests; invalid configuration stops startup / จำกัดคำขอ AI ต่อผู้ใช้; config ผิดให้หยุดตอนเริ่มระบบ
+AI_RATE_LIMIT_MAX = _bounded_env_int("AI_RATE_LIMIT_MAX", 20, 1, 1_000)
+AI_RATE_LIMIT_WINDOW_SECONDS = _bounded_env_int(
+    "AI_RATE_LIMIT_WINDOW_SECONDS", 60, 1, 86_400
 )
-AI_MAX_CONCURRENT_REQUESTS = max(
-    1, int(os.getenv("AI_MAX_CONCURRENT_REQUESTS", "2"))
+# EN/TH: Bound simultaneous provider calls per worker / จำกัดงานเรียก provider พร้อมกันต่อ worker
+AI_MAX_CONCURRENT_REQUESTS = _bounded_env_int(
+    "AI_MAX_CONCURRENT_REQUESTS", 2, 1, 64
 )
 _AI_REQUEST_TIMES: OrderedDict[str, deque[float]] = OrderedDict()
 _AI_RATE_LIMIT_LOCK = Lock()
@@ -44,8 +130,9 @@ _FIRESTORE_CLIENT = firestore.Client() if USE_FIRESTORE and firestore else None
 
 
 class CloudPayload(BaseModel):
-    class Config:
-        extra = "allow"
+    # EN: Keep forward-compatible event fields while using Pydantic v2 config.
+    # TH: ยอมรับฟิลด์ event เพิ่มเติมเพื่อรองรับรุ่นใหม่ และใช้ config ของ Pydantic v2
+    model_config = ConfigDict(extra="allow")
 
 
 class ChatRequest(BaseModel):
@@ -106,6 +193,12 @@ def _verify_chat_user(authorization: Optional[str]) -> str:
     return user_id
 
 
+def _memory_health_storage_enabled() -> bool:
+    """Return true only when an operator explicitly enables ephemeral storage."""
+    value = os.getenv("HEALTH_DATA_MEMORY_STORAGE_ENABLED", "false")
+    return value.strip().lower() in {"1", "true", "yes"}
+
+
 def _require_health_data_sync_enabled() -> None:
     """Keep health-data routes closed until deployment review explicitly enables them."""
     enabled = os.getenv("HEALTH_DATA_SYNC_ENABLED", "false").strip().lower()
@@ -113,6 +206,13 @@ def _require_health_data_sync_enabled() -> None:
         raise HTTPException(
             status_code=503,
             detail="Health-data sync is disabled on this deployment.",
+        )
+    # EN: Do not claim sync succeeded when only process memory is available.
+    # TH: ห้ามแจ้งว่าสำเร็จเมื่อมีเพียงหน่วยความจำชั่วคราว เว้นแต่เปิด opt-in สำหรับพัฒนา
+    if not _FIRESTORE_CLIENT and not _memory_health_storage_enabled():
+        raise HTTPException(
+            status_code=503,
+            detail="Persistent health-data storage is unavailable.",
         )
 
 
@@ -160,6 +260,12 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/")
+def service_root():
+    """Give the public service URL a minimal status response without exposing data."""
+    return {"service": "doz Cloud API", "status": "ok", "health": "/health"}
+
+
 @app.delete("/account", status_code=204)
 def delete_account(authorization: Optional[str] = Header(default=None)):
     """Delete only the authenticated user's records and Supabase Auth account."""
@@ -170,6 +276,14 @@ def delete_account(authorization: Optional[str] = Header(default=None)):
         raise HTTPException(
             status_code=503,
             detail="Account deletion is not configured on this server.",
+        )
+
+    # EN: Do not delete the identity when health records cannot be checked/deleted.
+    # TH: ห้ามลบบัญชีเมื่อยังตรวจ/ลบข้อมูลสุขภาพใน persistent storage ไม่ได้
+    if not _FIRESTORE_CLIENT and not _memory_health_storage_enabled():
+        raise HTTPException(
+            status_code=503,
+            detail="Persistent health-data storage is unavailable for account deletion.",
         )
 
     # Health events are keyed by the verified user ID in Firestore subcollections.
@@ -219,6 +333,8 @@ def sensor_events(
 ):
     user_id = _verify_chat_user(authorization)
     _require_health_data_sync_enabled()
+    if _FIRESTORE_CLIENT:
+        return _read_firestore_events("sensor_events", user_id, limit)
     events = [event for event in SENSOR_EVENTS if event.get("authUserId") == user_id]
     return events[-limit:]
 
@@ -230,6 +346,8 @@ def alert_events(
 ):
     user_id = _verify_chat_user(authorization)
     _require_health_data_sync_enabled()
+    if _FIRESTORE_CLIENT:
+        return _read_firestore_events("alert_events", user_id, limit)
     events = [event for event in ALERT_EVENTS if event.get("authUserId") == user_id]
     return events[-limit:]
 
@@ -238,13 +356,23 @@ def alert_events(
 def devices(authorization: Optional[str] = Header(default=None)):
     user_id = _verify_chat_user(authorization)
     _require_health_data_sync_enabled()
+    if _FIRESTORE_CLIENT:
+        events = _read_firestore_events(
+            "sensor_events",
+            user_id,
+            MAX_FIRESTORE_DEVICES_PER_USER,
+            per_device_limit=1,
+        )
+    else:
+        events = [event for event in SENSOR_EVENTS if event.get("authUserId") == user_id]
     latest: dict[str, dict[str, Any]] = {}
-    for event in SENSOR_EVENTS:
-        if event.get("authUserId") != user_id:
-            continue
+    for event in events:
         profile = event.get("userProfile") or {}
         device_id = str(profile.get("deviceId") or "unknown-device")
-        latest[device_id] = event
+        if device_id not in latest or str(event.get("receivedAt", "")) > str(
+            latest[device_id].get("receivedAt", "")
+        ):
+            latest[device_id] = event
     return list(latest.values())
 
 
@@ -402,19 +530,25 @@ def sensor(
     user_id = _verify_chat_user(authorization)
     _require_health_data_sync_enabled()
     event = payload.model_dump()
-    errors = _validate_sensor_event(event)
-    if errors:
-        raise HTTPException(status_code=422, detail={"errors": errors})
+    # EN: Bind ownership from verified auth before validation; never trust a client user ID.
+    # TH: ใส่เจ้าของจาก token ที่ตรวจแล้วก่อน validate และไม่เชื่อ user ID ที่ client ส่ง
     profile = event.get("userProfile")
     if not isinstance(profile, dict):
         profile = {}
     profile["userId"] = user_id
     event["userProfile"] = profile
+    errors = _validate_sensor_event(event)
+    if errors:
+        raise HTTPException(status_code=422, detail={"errors": errors})
     event["authUserId"] = user_id
     event["receivedAt"] = datetime.utcnow().isoformat()
-    SENSOR_EVENTS.append(event)
-    _write_firestore("sensor_events", event)
-    return {"ok": True, "stored": len(SENSOR_EVENTS)}
+    persisted = _write_firestore("sensor_events", event)
+    _append_bounded_event(SENSOR_EVENTS, event)
+    return {
+        "ok": True,
+        "stored": len(SENSOR_EVENTS),
+        "storage": "firestore" if persisted else "memory-ephemeral",
+    }
 
 
 @app.post("/alert")
@@ -430,11 +564,18 @@ def alert(
         profile = {}
     profile["userId"] = user_id
     event["userProfile"] = profile
+    device_id_error = _device_id_error(profile.get("deviceId"))
+    if device_id_error:
+        raise HTTPException(status_code=422, detail=device_id_error)
     event["authUserId"] = user_id
     event["receivedAt"] = datetime.utcnow().isoformat()
-    ALERT_EVENTS.append(event)
-    _write_firestore("alert_events", event)
-    return {"ok": True, "stored": len(ALERT_EVENTS)}
+    persisted = _write_firestore("alert_events", event)
+    _append_bounded_event(ALERT_EVENTS, event)
+    return {
+        "ok": True,
+        "stored": len(ALERT_EVENTS),
+        "storage": "firestore" if persisted else "memory-ephemeral",
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -443,9 +584,11 @@ def alert(
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://router.huggingface.co/v1")
 LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("HF_TOKEN") or ""
 LLM_MODEL_DEFAULT = os.getenv("LLM_MODEL", "nectec/Pathumma-llm-text-1.0.0:featherless-ai")
-RAG_TOP_K = int(os.getenv("RAG_TOP_K", "3"))
+# EN/TH: Bound retrieved knowledge count / จำกัดจำนวนเอกสารความรู้ที่ดึงมาใช้
+RAG_TOP_K = _bounded_env_int("RAG_TOP_K", 3, 1, 50)
 # คะแนนความเกี่ยวข้องขั้นต่ำ — ต่ำกว่านี้ถือว่าไม่เกี่ยว (กันดึงความรู้สุขภาพใส่คำถามทั่วไป)
-RAG_MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.12"))
+# EN/TH: Keep retrieval threshold finite and within cosine-score bounds / จำกัด threshold ให้อยู่ในช่วง cosine score
+RAG_MIN_SCORE = _bounded_env_float("RAG_MIN_SCORE", 0.12, 0.0, 1.0)
 
 SYSTEM_TH = (
     "คุณคือ doz / VitaGuard AI ผู้ช่วยดูแลสุขภาพที่เป็นมิตร "
@@ -648,10 +791,12 @@ _DENY_PATTERNS = re.compile(
 
 
 def _apply_guardrails(text: str) -> str:
-    """TH: ตัดประโยควินิจฉัย/สั่งยาออก / EN: strip diagnostic or dosage lines"""
+    """Remove unsafe lines; fail closed if nothing safe remains. / ตัดบรรทัดเสี่ยงและปิดแบบปลอดภัยเมื่อไม่เหลือข้อความ"""
     kept = [ln for ln in text.splitlines() if not _DENY_PATTERNS.search(ln)]
     cleaned = "\n".join(kept).strip()
-    return cleaned or text.strip()
+    # EN: Never restore the original text after filtering removed every line.
+    # TH: ห้ามคืนข้อความเดิมหลังตัวกรองลบทุกบรรทัด เพราะจะทำให้ข้าม guardrail
+    return cleaned or "ขออภัย ระบบไม่สามารถให้คำแนะนำนี้ได้อย่างปลอดภัย กรุณาติดต่อผู้เชี่ยวชาญหรือหน่วยฉุกเฉินหากจำเป็น"
 
 
 def _deterministic_advice(status: str, level: str) -> str:
@@ -774,8 +919,11 @@ def _generate_advice(payload: AdviceRequest) -> dict[str, Any]:
 
 
 def _validate_sensor_event(event: dict[str, Any]) -> list[str]:
-    sensor = event.get("sensorData") or {}
     errors: list[str] = []
+    sensor = event.get("sensorData")
+    if not isinstance(sensor, dict):
+        errors.append("sensorData must be an object")
+        sensor = {}
     _require_range(errors, sensor, "heart_rate", "heartRate", 0, 240)
     _require_range(errors, sensor, "spo2", None, 0, 100)
     _require_range(errors, sensor, "ecg_rate", "ecgRate", 0, 240)
@@ -794,12 +942,27 @@ def _validate_sensor_event(event: dict[str, Any]) -> list[str]:
         "gyro_magnitude",
     ]:
         _require_number(errors, sensor, key)
-    profile = event.get("userProfile") or {}
+    profile = event.get("userProfile")
+    if not isinstance(profile, dict):
+        errors.append("userProfile must be an object")
+        profile = {}
     if not str(profile.get("userId") or "").strip():
         errors.append("userProfile.userId is required")
-    if not str(profile.get("deviceId") or "").strip():
-        errors.append("userProfile.deviceId is required")
+    device_id_error = _device_id_error(profile.get("deviceId"))
+    if device_id_error:
+        errors.append(device_id_error)
     return errors
+
+
+def _device_id_error(value: Any) -> Optional[str]:
+    """Validate the client device ID before using it in a Firestore path."""
+    if not isinstance(value, str) or not value.strip():
+        return "userProfile.deviceId is required"
+    # EN: Firestore path segments cannot contain slash and must stay bounded.
+    # TH: segment ของ Firestore ห้ามมี slash และจำกัดความยาวก่อนใช้เป็น path
+    if len(value) > 128 or "/" in value:
+        return "userProfile.deviceId has an invalid format"
+    return None
 
 
 def _require_range(
@@ -825,24 +988,137 @@ def _require_number(errors: list[str], data: dict[str, Any], key: str):
 
 def _number(value: Any) -> Optional[float]:
     try:
-        if value is None or value == "":
+        if value is None or value == "" or isinstance(value, bool):
             return None
-        return float(value)
+        number = float(value)
+        return number if math.isfinite(number) else None
     except (TypeError, ValueError):
         return None
 
 
-def _write_firestore(collection: str, event: dict[str, Any]):
+def _write_firestore(collection: str, event: dict[str, Any]) -> bool:
     if not _FIRESTORE_CLIENT:
-        return
+        return False
     profile = event.get("userProfile") or {}
     user_id = str(profile.get("userId") or "unknown-user")
     device_id = str(profile.get("deviceId") or "unknown-device")
     doc_id = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}-{device_id}"
-    (
-        _FIRESTORE_CLIENT.collection(f"{FIRESTORE_COLLECTION_PREFIX}_{collection}")
-        .document(user_id)
-        .collection(device_id)
-        .document(doc_id)
-        .set(event)
-    )
+    try:
+        user_document = _FIRESTORE_CLIENT.collection(
+            f"{FIRESTORE_COLLECTION_PREFIX}_{collection}"
+        ).document(user_id)
+        # EN: Seed the transactional registry once for accounts with legacy subcollections.
+        # TH: เริ่ม registry ใน transaction จาก subcollection เก่าที่มีอยู่แล้ว
+        root_snapshot = user_document.get()
+        registry = root_snapshot.to_dict() if root_snapshot.exists else None
+        if not isinstance(registry, dict) or not isinstance(
+            registry.get("device_ids"), list
+        ):
+            legacy_device_ids = {item.id for item in user_document.collections()}
+        else:
+            legacy_device_ids = set()
+        event_document = user_document.collection(device_id).document(doc_id)
+        _persist_firestore_event(
+            user_document,
+            event_document,
+            device_id,
+            event,
+            legacy_device_ids,
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        # EN: Fail as unavailable without returning a false success or leaking event data.
+        # TH: แจ้ง storage ใช้ไม่ได้ ไม่ตอบสำเร็จเท็จหรือเปิดเผยข้อมูล event
+        raise HTTPException(
+            status_code=503,
+            detail="Persistent health-data storage write failed.",
+        ) from None
+    return True
+
+
+def _persist_firestore_event(
+    user_document: Any,
+    event_document: Any,
+    device_id: str,
+    event: dict[str, Any],
+    legacy_device_ids: set[str],
+) -> None:
+    """Transactionally enforce the per-account device cap and store one event."""
+    if firestore is None or _FIRESTORE_CLIENT is None:
+        raise HTTPException(status_code=503, detail="Persistent storage is unavailable.")
+
+    @firestore.transactional
+    def persist(transaction):
+        # EN: Read registry in the transaction so concurrent workers serialize updates.
+        # TH: อ่าน registry ใน transaction เพื่อให้ worker ที่เขียนพร้อมกัน serialize กัน
+        snapshot = user_document.get(transaction=transaction)
+        raw_device_ids = snapshot.get("device_ids") if snapshot.exists else []
+        registered_ids = (
+            {item for item in raw_device_ids if isinstance(item, str)}
+            if isinstance(raw_device_ids, list)
+            else set()
+        )
+        registered_ids.update(legacy_device_ids)
+        if (
+            device_id not in registered_ids
+            and len(registered_ids) >= MAX_FIRESTORE_DEVICES_PER_USER
+        ):
+            raise HTTPException(
+                status_code=429,
+                detail="This account has reached its registered device limit.",
+            )
+        registered_ids.add(device_id)
+        transaction.set(user_document, {"device_ids": sorted(registered_ids)}, merge=True)
+        transaction.set(event_document, event)
+
+    # EN: Firestore retries this transaction if another worker changes the registry.
+    # TH: Firestore retry transaction เมื่อ worker อื่นแก้ registry พร้อมกัน
+    persist(_FIRESTORE_CLIENT.transaction())
+
+
+def _read_firestore_events(
+    collection: str,
+    user_id: str,
+    limit: int,
+    *,
+    per_device_limit: Optional[int] = None,
+) -> list[dict[str, Any]]:
+    """Read the authenticated user's latest events across the bounded device set."""
+    if not _FIRESTORE_CLIENT:
+        raise HTTPException(status_code=503, detail="Persistent storage is unavailable.")
+    try:
+        user_document = _FIRESTORE_CLIENT.collection(
+            f"{FIRESTORE_COLLECTION_PREFIX}_{collection}"
+        ).document(user_id)
+        device_collections = list(user_document.collections())
+        if len(device_collections) > MAX_FIRESTORE_DEVICES_PER_USER:
+            raise HTTPException(
+                status_code=503,
+                detail="Stored device data exceeds the configured read limit.",
+            )
+        events: list[tuple[str, dict[str, Any]]] = []
+        for device_collection in device_collections:
+            snapshots = (
+                device_collection.order_by(
+                    "__name__", direction=firestore.Query.DESCENDING
+                )
+                .limit(per_device_limit or limit)
+                .stream()
+            )
+            for snapshot in snapshots:
+                event = snapshot.to_dict()
+                if not isinstance(event, dict) or event.get("authUserId") != user_id:
+                    continue
+                events.append((snapshot.id, event))
+        events.sort(key=lambda item: (str(item[1].get("receivedAt", "")), item[0]))
+        return [event for _, event in events[-limit:]]
+    except HTTPException:
+        raise
+    except Exception:
+        # EN: Keep provider details and health data out of the HTTP error body.
+        # TH: ไม่เปิดเผยรายละเอียด provider หรือข้อมูลสุขภาพใน body ของ error
+        raise HTTPException(
+            status_code=503,
+            detail="Persistent health-data storage read failed.",
+        ) from None
