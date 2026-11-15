@@ -122,6 +122,7 @@ void main() {
     final state = DozState()
       ..bleConnected = true
       ..lastReadingWasFromDevice = true
+      ..bleDroppedReports = 3
       ..bleDeviceName = 'Doz prototype'
       ..lastSensorUpdateAt = DateTime.now()
       ..currentSensor = SensorData(
@@ -163,6 +164,8 @@ void main() {
     );
     expect(find.text('123456'), findsOneWidget);
     expect(find.text('234567'), findsOneWidget);
+    expect(find.text('รายงาน BLE ที่ข้าม'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
     expect(tester.takeException(), isNull);
     expect(
       find.textContaining('ยังไม่ยืนยันตัวตนผู้ส่ง BLE'),

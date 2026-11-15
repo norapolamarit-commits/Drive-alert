@@ -25,6 +25,7 @@ void main() {
     expect(reading.sensorData.heartRate, 0);
     expect(reading.sensorData.spo2, 0);
     expect(reading.analysisAvailable, isFalse);
+    expect(reading.droppedBleReports, 3);
     expect(reading.riskResult, isNull);
   });
 
@@ -57,6 +58,7 @@ void main() {
     );
     expect(BleService.decodeTelemetryJsonPacket(packet(json(ppgCount: 0))),
         isNull);
+    expect(BleService.decodeTelemetryJsonPacket(packet(json())), isNull);
     expect(
       BleService.decodeTelemetryJsonPacket([0xff, 0xfe]),
       isNull,

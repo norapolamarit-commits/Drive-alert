@@ -47,7 +47,7 @@ def main() -> None:
 
     wire_fields = (r'\"type\":\"telemetry\"', r'\"v\":1', r'\"t\":',
                    r'\"r\":', r'\"i\":', r'\"a\":[', r'\"g\":[',
-                   r'\"pn\":', r'\"in\":', r'\"ai\":false')
+                   r'\"pn\":', r'\"in\":', r'\"bd\":', r'\"ai\":false')
     packet_template = next(
         (line for line in firmware.splitlines()
          if r'\"type\":\"telemetry\"' in line),
@@ -56,7 +56,7 @@ def main() -> None:
     require(packet_template is not None, "firmware telemetry JSON template is missing")
     for field in wire_fields:
         require(field in packet_template, f"firmware telemetry field missing: {field}")
-    for field in ("'type'", "'v'", "'t'", "'r'", "'i'", "'a'", "'g'", "'pn'", "'in'", "'ai'"):
+    for field in ("'type'", "'v'", "'t'", "'r'", "'i'", "'a'", "'g'", "'pn'", "'in'", "'bd'", "'ai'"):
         require(field in app_ble, f"app decoder no longer handles {field}")
 
     require("frame[0] = 0xD0" in firmware and "frame[1] = 0x5A" in firmware,

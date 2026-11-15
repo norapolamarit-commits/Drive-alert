@@ -683,6 +683,8 @@ class DozState extends ChangeNotifier {
   DateTime? bleConnectedAt;
   DateTime? lastSensorUpdateAt;
   bool lastReadingWasFromDevice = false;
+  int?
+      bleDroppedReports; // EN: Show firmware BLE queue loss without treating it as a sensor measurement. TH: แสดง report ที่คิว BLE ข้ามโดยไม่ถือเป็นค่าจากเซนเซอร์
   String sensorStatus = 'No sensor data yet';
   String _lastNotifiedFreshnessStatus = 'No sensor data yet';
   String cloudStatus =
@@ -844,6 +846,7 @@ class DozState extends ChangeNotifier {
     bleConnectedAt = null;
     deviceBattery = null;
     lastReadingWasFromDevice = false;
+    bleDroppedReports = null;
     lastSensorUpdateAt = null;
     _lastNotifiedFreshnessStatus = 'No sensor data yet';
     bleStatus = 'BLE connection lost; demo data mode';
@@ -949,6 +952,7 @@ class DozState extends ChangeNotifier {
       bleConnected = false;
       bleConnectedAt = null;
       lastReadingWasFromDevice = false;
+      bleDroppedReports = null;
       lastSensorUpdateAt = null;
       _lastNotifiedFreshnessStatus = 'No sensor data yet';
       deviceBattery = null;
@@ -1169,6 +1173,7 @@ class DozState extends ChangeNotifier {
     bleConnected = false;
     bleConnectedAt = null;
     lastReadingWasFromDevice = false;
+    bleDroppedReports = null;
     bleDeviceName = 'No device selected';
     bleDeviceId = '-';
     deviceBattery = null;
@@ -1239,6 +1244,7 @@ class DozState extends ChangeNotifier {
         (!_authSessionActive || AuthService.currentUserId == null)) {
       return;
     }
+    bleDroppedReports = reading.droppedBleReports;
     if (!reading.analysisAvailable || reading.riskResult == null) {
       // EN: Keep raw telemetry out of the AI/risk-alert path. TH: แยก telemetry ดิบออกจากเส้นทาง AI/แจ้งเตือนความเสี่ยง
       currentSensor = reading
@@ -1978,6 +1984,9 @@ class DozState extends ChangeNotifier {
     await _bleService.disconnect();
     bleConnected = false;
     bleConnectedAt = null;
+    lastReadingWasFromDevice = false;
+    bleDroppedReports = null;
+    lastSensorUpdateAt = null;
     bleStatus = 'Mock BLE stream connected';
     await _saveSettings();
     _notifyIfAlive();
@@ -1988,6 +1997,7 @@ class DozState extends ChangeNotifier {
     _warningTimer = null;
     _warningEpisodeAcknowledged = false;
     lastReadingWasFromDevice = false;
+    bleDroppedReports = null;
     lastSensorUpdateAt = null;
     _lastNotifiedFreshnessStatus = 'No sensor data yet';
     deviceBattery = null;
@@ -2023,6 +2033,9 @@ class DozState extends ChangeNotifier {
     await _bleService.disconnect();
     bleConnected = false;
     bleConnectedAt = null;
+    lastReadingWasFromDevice = false;
+    bleDroppedReports = null;
+    lastSensorUpdateAt = null;
     bleDeviceName = 'No device selected';
     bleDeviceId = '-';
     bleServiceUuid = _bleService.configuredServiceUuid.isEmpty

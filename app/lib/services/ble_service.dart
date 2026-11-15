@@ -26,6 +26,7 @@ class DozDeviceReading {
     this.riskResult,
     required this.battery,
     required this.analysisAvailable,
+    this.droppedBleReports,
   });
 
   final SensorData sensorData;
@@ -33,6 +34,9 @@ class DozDeviceReading {
   final int?
       battery; // EN: Null means this packet did not report battery. TH: null หมายถึง packet นี้ไม่ได้รายงานแบตเตอรี่
   final bool analysisAvailable;
+  // EN: Reports skipped by the firmware BLE transmit queue since its last accepted report.
+  // TH: จำนวน report ที่คิวส่ง BLE ของ firmware ข้ามตั้งแต่ report ที่รับเข้าคิวครั้งก่อน
+  final int? droppedBleReports;
 }
 
 class BleService {
@@ -678,6 +682,7 @@ class BleService {
           'pn']); // EN: Validate that PPG samples existed. TH: ตรวจว่ามีตัวอย่าง PPG
       final imuCount = _integer(packet[
           'in']); // EN: Validate that IMU samples existed. TH: ตรวจว่ามีตัวอย่าง IMU
+      final droppedBleReports = _integer(packet['bd']);
       if (red ==
               null || // EN: Require every expected channel and sample count before constructing a reading. TH: บังคับให้ channel และจำนวนตัวอย่างที่คาดไว้ครบก่อนสร้าง reading
           ir == null ||
@@ -686,6 +691,13 @@ class BleService {
           ppgCount == null ||
           imuCount == null) {
         return null; // EN: Reject missing or malformed fields. TH: ปฏิเสธฟิลด์ที่ขาดหรือผิดรูปแบบ
+      }
+      // EN: The current firmware always reports a nonnegative 32-bit BLE drop count.
+      // TH: firmware ปัจจุบันส่งจำนวน report ที่ข้ามแบบจำนวนเต็ม 32 บิตไม่ติดลบเสมอ
+      if (droppedBleReports == null ||
+          droppedBleReports < 0 ||
+          droppedBleReports > 0xffffffff) {
+        return null;
       }
       if (red <
               0 || // EN: Enforce physical integer bounds for optical counts and report sizes. TH: บังคับขอบเขตจำนวนเต็มของ ADC และขนาดรายงาน
@@ -745,8 +757,9 @@ class BleService {
           riskResult: null,
           battery:
               null, // EN: Firmware JSON v1 has no battery field. TH: firmware JSON v1 ไม่มีฟิลด์แบตเตอรี่
-          analysisAvailable:
-              false); // EN: Explicitly indicate that no inference was sent. TH: ระบุชัดว่าไม่มีผล inference ส่งมา
+          analysisAvailable: false,
+          droppedBleReports:
+              droppedBleReports); // EN: Preserve transport loss separately from sensor values. TH: เก็บจำนวน report ที่หลุดแยกจากค่าของเซนเซอร์
     } on FormatException {
       // EN: Handle invalid UTF-8 or JSON syntax. TH: จัดการ UTF-8 หรือ syntax JSON ที่ผิด
       // EN: Reject malformed JSON/UTF-8. TH: ปฏิเสธ JSON หรือ UTF-8 ที่ผิดรูปแบบ

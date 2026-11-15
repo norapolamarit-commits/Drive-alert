@@ -279,6 +279,11 @@ class _LiveTelemetryCard extends StatelessWidget {
               children: [
                 _ReadingChip(label: 'Red (ADC)', value: '${raw.rawRed}'),
                 _ReadingChip(label: 'IR (ADC)', value: '${raw.rawIr}'),
+                if (state.bleDroppedReports != null)
+                  _ReadingChip(
+                    label: copy('BLE reports skipped', 'รายงาน BLE ที่ข้าม'),
+                    value: '${state.bleDroppedReports}',
+                  ),
                 _ReadingChip(
                     label: 'Accel X',
                     value: '${raw.accelX.toStringAsFixed(2)} m/s²'),

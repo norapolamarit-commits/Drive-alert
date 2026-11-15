@@ -152,7 +152,7 @@ void main() {
       final ir = random.nextInt(
           262144); // EN: Generate an in-range infrared ADC value. TH: สร้างค่า ADC อินฟราเรดในช่วงที่รับได้
       final payload = utf8.encode(
-          '{"type":"telemetry","v":1,"t":$caseIndex,"r":$red,"i":$ir,"a":[0,-8192,16384],"g":[131,-262,0],"pn":1,"in":1,"ai":false}'); // EN: Build a valid firmware-contract payload. TH: สร้าง payload ตามสัญญา firmware ที่ถูกต้อง
+          '{"type":"telemetry","v":1,"t":$caseIndex,"r":$red,"i":$ir,"a":[0,-8192,16384],"g":[131,-262,0],"pn":1,"in":1,"bd":0,"ai":false}'); // EN: Build a valid firmware-contract payload including the BLE drop count. TH: สร้าง payload ตามสัญญา firmware รวมจำนวน report ที่คิว BLE ข้าม
       final decoded = BleService.decodeTelemetryJsonPacket(
           payload); // EN: Decode the generated live packet. TH: ถอดรหัส packet live ที่สร้างขึ้น
       expect(decoded, isNotNull,
