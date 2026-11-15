@@ -8,7 +8,15 @@ import sys
 from typing import Dict, Optional, Tuple, Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener  # EN: Open HTTPS requests with redirect control. TH: เปิดคำขอ HTTPS โดยควบคุม redirect
+
+
+class _RejectRedirects(HTTPRedirectHandler):  # EN: Keep the test token on the configured origin. TH: จำกัด test token ให้อยู่กับ origin ที่กำหนด
+    def redirect_request(self, request, fp, code, msg, headers, newurl):  # EN: Intercept every redirect before a follow-up request. TH: ดัก redirect ทุกครั้งก่อนส่งคำขอถัดไป
+        return None  # EN: Turn redirects into HTTP errors without forwarding Authorization. TH: ทำ redirect เป็น HTTP error โดยไม่ส่ง Authorization ต่อ
+
+
+_OPENER = build_opener(_RejectRedirects())  # EN: Reuse a non-redirecting opener for all preflight calls. TH: ใช้ opener ที่ไม่ตาม redirect กับทุกคำขอ preflight
 
 
 def parse_base_url(value: str) -> str:
@@ -43,7 +51,7 @@ def request_json(
         headers["Authorization"] = f"Bearer {token}"
     request = Request(url, data=payload, headers=headers, method="POST" if payload else "GET")
     try:
-        with urlopen(request, timeout=12) as response:
+        with _OPENER.open(request, timeout=12) as response:  # EN: Never follow a redirect carrying the test token. TH: ห้ามตาม redirect ที่อาจพา test token ไปด้วย
             raw = response.read(64_001)
             if len(raw) > 64_000:
                 raise ValueError("API response exceeded the 64 KB preflight limit.")

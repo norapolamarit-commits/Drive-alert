@@ -1,11 +1,42 @@
 import os
 import unittest
+from urllib.error import HTTPError
 from unittest.mock import patch
 
 import preflight_chat
 
 
 class PreflightChatTests(unittest.TestCase):
+    def test_redirect_handler_never_forwards_authorization(self):
+        handler = preflight_chat._RejectRedirects()
+        self.assertIsNone(
+            handler.redirect_request(
+                None,
+                None,
+                302,
+                "Found",
+                {"Location": "https://different.example.org/collect"},
+                "https://different.example.org/collect",
+            )
+        )
+
+    def test_preflight_reports_redirect_status_without_following_it(self):
+        redirect = HTTPError(
+            "https://api.example.org/chat",
+            302,
+            "Found",
+            {"Location": "https://different.example.org/collect"},
+            None,
+        )
+        with patch.object(preflight_chat._OPENER, "open", side_effect=redirect) as open_request:
+            status, payload = preflight_chat.request_json(
+                "https://api.example.org/chat",
+                token="test-token-not-for-real-use",
+                body={"question": "test", "prompt": "test"},
+            )
+        self.assertEqual((status, payload), (302, None))
+        self.assertEqual(open_request.call_count, 1)
+
     def test_base_url_requires_clean_https_api_base(self):
         self.assertEqual(
             preflight_chat.parse_base_url("https://api.example.org/v1/"),
