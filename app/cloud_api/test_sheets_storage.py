@@ -84,6 +84,13 @@ class SheetsStoreTests(unittest.TestCase):
         with self.assertRaises(SheetsStorageError):
             self.store.read("sensor_events", "alice", 10)
 
+    def test_read_rejects_zero_and_negative_limits(self):
+        self.store.append("sensor_events", {"authUserId": "alice", "receivedAt": "1"})
+        for limit in (0, -1, 2001, True):
+            with self.subTest(limit=limit):
+                with self.assertRaises(SheetsStorageError):
+                    self.store.read("sensor_events", "alice", limit)
+
     def test_readiness_checks_both_sheets_tabs_when_sync_is_enabled(self):
         with patch.object(main, "_SHEETS_STORE", self.store):
             with patch.dict("os.environ", {
