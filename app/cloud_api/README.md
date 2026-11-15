@@ -3,7 +3,7 @@
 ## Local run
 
 ```sh
-cd /Users/norapol/Downloads/Doz/app/cloud_api
+cd /Users/norapol/Documents/Doz/app/cloud_api
 python3.11 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
