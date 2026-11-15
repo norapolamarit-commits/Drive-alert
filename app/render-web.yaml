@@ -1,0 +1,27 @@
+# EN: Deploy the Flutter web client as a separate Render static site. TH: เผยแพร่ Flutter web แยกเป็น static site บน Render
+services:
+  # EN: Keep the existing Cloud API service independent. TH: คงบริการ Cloud API เดิมไว้แยกต่างหาก
+  - type: web
+    # EN: Publish built files through Render's static CDN. TH: ส่งไฟล์ที่ build แล้วผ่าน CDN แบบ static
+    runtime: static
+    # EN: Give this site its own name and URL. TH: ตั้งชื่อและ URL แยกสำหรับหน้าเว็บ
+    name: doz-web
+    # EN: Resolve the Flutter project from the repository root. TH: ใช้โฟลเดอร์ Flutter ภายใน repository
+    rootDir: app
+    # EN: Validate public configuration and compile the web application. TH: ตรวจ config สาธารณะแล้ว build เว็บ
+    buildCommand: bash scripts/render_build_web.sh
+    # EN: Render serves this generated directory. TH: Render เผยแพร่โฟลเดอร์ผล build นี้
+    staticPublishPath: build/web
+    # EN: Supply only browser-safe values at build time. TH: กำหนดเฉพาะค่าที่เปิดเผยใน browser ได้ตอน build
+    envVars:
+      # EN: This project origin is included in web assets. TH: URL project นี้จะอยู่ในไฟล์เว็บ
+      - key: DOZ_SUPABASE_URL
+        sync: false
+      # EN: Use a publishable or anon key, never a service-role key. TH: ใช้ publishable/anon key ห้ามใช้ service-role
+      - key: DOZ_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+    # EN: Route client-side paths to Flutter's entry point. TH: ส่งเส้นทางของแอปกลับไปยังหน้าเริ่มต้น
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

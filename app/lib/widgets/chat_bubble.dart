@@ -2,25 +2,35 @@ import 'package:flutter/material.dart';
 
 import '../models/chat_message.dart';
 
+/// EN: Dark teal keeps white user text readable. TH: สีเขียวเข้มช่วยให้ข้อความสีขาวอ่านชัด
+const chatUserBubbleColors = [Color(0xFF0B6254), Color(0xFF087F68)];
+
+// EN: Render one chat message with sender-specific alignment and time.
+// TH: แสดงข้อความแชตหนึ่งรายการพร้อมตำแหน่งตามผู้ส่งและเวลา
 class ChatBubble extends StatelessWidget {
   const ChatBubble({super.key, required this.message});
 
-  final ChatMessage message;
+  final ChatMessage
+      message; // EN: Content, sender flag, and timestamp. TH: เนื้อหา ผู้ส่ง และเวลา
 
+  // EN: Format the message time in local 24-hour notation. TH: จัดเวลาแบบ 24 ชั่วโมง
   String _time(DateTime t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
-    final isUser = message.isUser;
+    final isUser = message
+        .isUser; // EN: Choose the user's style when true. TH: เลือกรูปแบบข้อความผู้ใช้เมื่อเป็นจริง
 
+    // EN: Limit bubble width so long text remains readable on wide displays.
+    // TH: จำกัดความกว้างฟองข้อความให้อ่านง่ายบนจอกว้าง
     final bubble = Container(
       constraints: const BoxConstraints(maxWidth: 300),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         gradient: isUser
             ? const LinearGradient(
-                colors: [Color(0xFFF65A5A), Color(0xFFEF4444)],
+                colors: chatUserBubbleColors,
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               )
@@ -40,6 +50,8 @@ class ChatBubble extends StatelessWidget {
       ),
     );
 
+    // EN: Place the timestamp directly below the message body.
+    // TH: วางเวลาไว้ใต้เนื้อหาข้อความ
     final column = Column(
       crossAxisAlignment:
           isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -55,6 +67,8 @@ class ChatBubble extends StatelessWidget {
       ],
     );
 
+    // EN: Put user messages right and assistant messages left with an avatar.
+    // TH: วางข้อความผู้ใช้ด้านขวาและข้อความผู้ช่วยด้านซ้ายพร้อมไอคอน
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -73,6 +87,8 @@ class ChatBubble extends StatelessWidget {
   }
 }
 
+// EN: Draw the assistant avatar used by messages and typing state.
+// TH: วาดไอคอนผู้ช่วยสำหรับข้อความและสถานะกำลังพิมพ์
 class _BotAvatar extends StatelessWidget {
   const _BotAvatar();
 
@@ -92,7 +108,8 @@ class _BotAvatar extends StatelessWidget {
   }
 }
 
-/// ฟอง "กำลังพิมพ์..." ระหว่างรอ AI ตอบ
+/// EN: Show an animated waiting indicator while a response is pending.
+/// TH: แสดงตัวบ่งชี้กำลังรอคำตอบแบบเคลื่อนไหว
 class TypingBubble extends StatelessWidget {
   const TypingBubble({super.key});
 
@@ -125,6 +142,8 @@ class TypingBubble extends StatelessWidget {
   }
 }
 
+// EN: Own the three animated dots used inside the waiting bubble.
+// TH: จัดการจุดเคลื่อนไหวสามจุดภายในฟองรอคำตอบ
 class _Dots extends StatefulWidget {
   const _Dots();
 
@@ -133,6 +152,8 @@ class _Dots extends StatefulWidget {
 }
 
 class _DotsState extends State<_Dots> with SingleTickerProviderStateMixin {
+  // EN: Repeat one opacity cycle per second while mounted.
+  // TH: วนรอบความทึบทุกหนึ่งวินาทีตราบเท่าที่ widget ยังทำงาน
   late final AnimationController _c = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1000),
@@ -140,6 +161,8 @@ class _DotsState extends State<_Dots> with SingleTickerProviderStateMixin {
 
   @override
   void dispose() {
+    // EN: Release the ticker when this waiting indicator disappears.
+    // TH: คืนทรัพยากร animation เมื่อเลิกแสดงตัวบ่งชี้
     _c.dispose();
     super.dispose();
   }
@@ -152,6 +175,8 @@ class _DotsState extends State<_Dots> with SingleTickerProviderStateMixin {
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: List.generate(3, (i) {
+            // EN: Offset each dot in time to create a traveling pulse.
+            // TH: เลื่อนจังหวะแต่ละจุดเพื่อให้เห็นการเคลื่อนไหวต่อเนื่อง
             final t = (_c.value + i * 0.2) % 1.0;
             final opacity = 0.3 + 0.7 * (t < 0.5 ? t * 2 : (1 - t) * 2);
             return Opacity(

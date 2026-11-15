@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+// EN: Render a labeled value; the caller decides whether it is live or demo data.
+// TH: แสดงค่าพร้อมชื่อ โดยผู้เรียกเป็นผู้กำหนดว่าเป็นข้อมูลจริงหรือข้อมูลสาธิต
 class SensorCard extends StatelessWidget {
   const SensorCard({
     super.key,
@@ -7,18 +9,24 @@ class SensorCard extends StatelessWidget {
     required this.value,
     required this.unit,
     required this.icon,
+    this.onTap,
   });
 
-  final String title;
-  final String value;
-  final String unit;
-  final IconData icon;
+  final String
+      title; // EN: Name the measured or displayed quantity. TH: ชื่อค่าที่แสดง
+  final String value; // EN: Preformatted display value. TH: ค่าที่จัดรูปแบบแล้ว
+  final String unit; // EN: Unit, if applicable. TH: หน่วย เมื่อมี
+  final IconData icon; // EN: Visual hint for the quantity. TH: ไอคอนของค่า
+  final VoidCallback?
+      onTap; // EN: Optional navigation action. TH: การกดเพื่อไปหน้าอื่นเมื่อมี
 
   @override
   Widget build(BuildContext context) {
+    // EN: Fit the same card content to phone and wider layouts.
+    // TH: ปรับขนาดการ์ดให้เหมาะกับมือถือและจอกว้าง
     final compact = MediaQuery.sizeOf(context).width < 600;
     final textTheme = Theme.of(context).textTheme;
-    return Container(
+    final card = Container(
       padding: EdgeInsets.all(compact ? 10 : 12),
       decoration: BoxDecoration(
         color: const Color(0xFF11141B),
@@ -40,6 +48,8 @@ class SensorCard extends StatelessWidget {
               height: 1.15,
             ),
           ),
+          // EN: Keep the value aligned near the bottom of each grid card.
+          // TH: จัดค่าที่แสดงให้อยู่ใกล้ด้านล่างของการ์ดในตาราง
           const Spacer(),
           FittedBox(
             fit: BoxFit.scaleDown,
@@ -58,6 +68,8 @@ class SensorCard extends StatelessWidget {
                     height: 1,
                   ),
                 ),
+                // EN: Do not show a unit when the caller supplied none.
+                // TH: ไม่แสดงหน่วยเมื่อผู้เรียกไม่ได้ระบุ
                 if (unit.isNotEmpty) ...[
                   const SizedBox(width: 4),
                   Padding(
@@ -74,5 +86,17 @@ class SensorCard extends StatelessWidget {
         ],
       ),
     );
+    // EN: Add tap feedback only for cards with an action.
+    // TH: เพิ่มการตอบสนองต่อการกดเฉพาะการ์ดที่มีคำสั่ง
+    return onTap == null
+        ? card
+        : Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: onTap,
+              child: card,
+            ),
+          );
   }
 }

@@ -4,7 +4,10 @@ import 'package:provider/provider.dart';
 
 import '../main.dart';
 import '../models/sensor_risk_sample.dart';
+import '../ui_text.dart';
 
+// EN: Host the device-only sensor history section as a full page.
+// TH: แสดงส่วนประวัติเซนเซอร์จริงเป็นหน้าเต็ม
 class HealthHistoryScreen extends StatelessWidget {
   const HealthHistoryScreen({super.key});
 
@@ -17,6 +20,8 @@ class HealthHistoryScreen extends StatelessWidget {
   }
 }
 
+// EN: Summarize only BLE packets that contain both optical channels.
+// TH: สรุปเฉพาะ packet BLE ที่มีข้อมูลแสงทั้งสองช่อง
 class HealthHistorySection extends StatefulWidget {
   const HealthHistorySection({super.key});
 
@@ -25,174 +30,130 @@ class HealthHistorySection extends StatefulWidget {
 }
 
 class _HealthHistorySectionState extends State<HealthHistorySection> {
-  String _selectedMetricId = 'heartRate';
+  String _selectedMetricId = 'redMean';
 
   static const _metrics = [
     _HistoryMetric(
-      id: 'heartRate',
-      title: 'Average Heart Rate',
-      unit: 'BPM',
+      id: 'redMean',
+      title: 'MAX30102 Red mean',
+      unit: 'ADC',
       icon: Icons.favorite,
     ),
     _HistoryMetric(
-      id: 'spo2',
-      title: 'Average SpO2',
-      unit: '%',
+      id: 'irMean',
+      title: 'MAX30102 IR mean',
+      unit: 'ADC',
       icon: Icons.air,
     ),
     _HistoryMetric(
-      id: 'ecgRate',
-      title: 'Average ECG Rate',
-      unit: 'BPM',
-      icon: Icons.monitor_heart,
-    ),
-    _HistoryMetric(
-      id: 'ecgRrInterval',
-      title: 'Average ECG RR',
-      unit: 'ms',
-      icon: Icons.timeline,
-    ),
-    _HistoryMetric(
-      id: 'ecgHrv',
-      title: 'Average ECG HRV',
-      unit: 'ms',
-      icon: Icons.show_chart,
-    ),
-    _HistoryMetric(
-      id: 'gsr',
-      title: 'Average GSR',
-      unit: '',
-      icon: Icons.sensors,
-    ),
-    _HistoryMetric(
-      id: 'temperature',
-      title: 'Average Temperature',
-      unit: '°C',
-      icon: Icons.thermostat,
-    ),
-    _HistoryMetric(
-      id: 'stress',
-      title: 'Average Stress',
-      unit: '',
-      icon: Icons.bolt,
-    ),
-    _HistoryMetric(
       id: 'accelX',
-      title: 'Average Accel X',
-      unit: 'g',
+      title: 'MPU6050 acceleration X',
+      unit: 'm/s²',
       icon: Icons.swap_horiz,
     ),
     _HistoryMetric(
       id: 'accelY',
-      title: 'Average Accel Y',
-      unit: 'g',
+      title: 'MPU6050 acceleration Y',
+      unit: 'm/s²',
       icon: Icons.swap_vert,
     ),
     _HistoryMetric(
       id: 'accelZ',
-      title: 'Average Accel Z',
-      unit: 'g',
+      title: 'MPU6050 acceleration Z',
+      unit: 'm/s²',
       icon: Icons.open_in_full,
     ),
     _HistoryMetric(
       id: 'gyroX',
-      title: 'Average Gyro X',
-      unit: 'dps',
+      title: 'MPU6050 gyroscope X',
+      unit: '°/s',
       icon: Icons.screen_rotation_alt,
     ),
     _HistoryMetric(
       id: 'gyroY',
-      title: 'Average Gyro Y',
-      unit: 'dps',
+      title: 'MPU6050 gyroscope Y',
+      unit: '°/s',
       icon: Icons.screen_rotation,
     ),
     _HistoryMetric(
       id: 'gyroZ',
-      title: 'Average Gyro Z',
-      unit: 'dps',
+      title: 'MPU6050 gyroscope Z',
+      unit: '°/s',
       icon: Icons.rotate_90_degrees_ccw,
-    ),
-    _HistoryMetric(
-      id: 'motionMagnitude',
-      title: 'Average Motion',
-      unit: 'g',
-      icon: Icons.directions_run,
-    ),
-    _HistoryMetric(
-      id: 'gyroMagnitude',
-      title: 'Average Gyro Magnitude',
-      unit: 'dps',
-      icon: Icons.threesixty,
-    ),
-    _HistoryMetric(
-      id: 'alerts',
-      title: 'High Alert Days',
-      unit: '',
-      icon: Icons.warning_amber,
     ),
   ];
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<DozState>();
-    final allSamples = state.sensorRiskHistory.isEmpty
-        ? [
-            SensorRiskSample(
-              sensorData: state.currentSensor,
-              riskResult: state.currentRisk,
-            ),
-          ]
-        : state.sensorRiskHistory;
-    final samples = _takeLast(allSamples, 120);
+    // EN: Current BLE packets carry both ADC fields; exclude demo and unsupported vitals.
+    // TH: packet BLE ปัจจุบันมี ADC สองช่อง จึงตัดค่าเดโมและค่าชีพจรที่ยังไม่รองรับ
+    final samples = _takeLast(
+      state.sensorRiskHistory
+          .where((sample) =>
+              sample.sensorData.rawRed != null &&
+              sample.sensorData.rawIr != null)
+          .toList(),
+      120,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _Header(),
         const SizedBox(height: 16),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 0.9,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          children: [
-            for (final metric in _metrics)
-              _MetricSummaryCard(
-                metric: metric,
-                value: _summaryValue(metric.id, samples),
-                samples: samples,
-                selected: metric.id == _selectedMetricId,
-                onTap: () {
-                  setState(() => _selectedMetricId = metric.id);
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => _HistoryDetailScreen(metric: metric),
-                    ),
-                  );
-                },
-              ),
-          ],
+        Text(
+          uiText(
+            context,
+            english:
+                'Only real BLE Red/IR and MPU6050 readings are shown. This firmware does not provide HR, SpO₂, ECG, GSR, or skin temperature.',
+            thai:
+                'แสดงเฉพาะค่า Red/IR และ MPU6050 ที่รับผ่าน BLE จริง เฟิร์มแวร์นี้ยังไม่ส่งค่า HR, SpO₂, ECG, GSR หรืออุณหภูมิผิวหนัง',
+          ),
+          style: const TextStyle(color: Color(0xFFA7B0C0), height: 1.4),
         ),
+        const SizedBox(height: 12),
+        if (samples.isEmpty)
+          _EmptyHistory(
+            message: uiText(
+              context,
+              english:
+                  'No real BLE sensor history yet. Connect the device to begin.',
+              thai:
+                  'ยังไม่มีประวัติเซนเซอร์จาก BLE จริง เชื่อมต่ออุปกรณ์เพื่อเริ่มเก็บข้อมูล',
+            ),
+          )
+        else
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            childAspectRatio: 0.9,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            children: [
+              for (final metric in _metrics)
+                _MetricSummaryCard(
+                  metric: metric,
+                  value: _summaryValue(metric.id, samples),
+                  samples: samples,
+                  selected: metric.id == _selectedMetricId,
+                  onTap: () {
+                    setState(() => _selectedMetricId = metric.id);
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => _HistoryDetailScreen(metric: metric),
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
       ],
     );
   }
 
   String _summaryValue(String metricId, List<SensorRiskSample> samples) {
-    if (metricId == 'alerts') {
-      final highAlertDays = samples
-          .where(
-            (item) =>
-                item.riskResult.alertLevel == 'Warning' ||
-                item.riskResult.alertLevel == 'Emergency',
-          )
-          .map((item) => DateUtils.dateOnly(item.sensorData.timestamp))
-          .toSet()
-          .length;
-      return '$highAlertDays';
-    }
-
     final values = samples.map((item) => _metricValue(metricId, item));
     return values.average().toStringAsFixed(1);
   }
@@ -209,7 +170,8 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      'Health History',
+      uiText(context,
+          english: 'Sensor Data History', thai: 'ประวัติข้อมูลเซนเซอร์'),
       style: Theme.of(context).textTheme.headlineSmall?.copyWith(
             color: Colors.white,
             fontWeight: FontWeight.w900,
@@ -218,6 +180,8 @@ class _Header extends StatelessWidget {
   }
 }
 
+// EN: Show the mean and a short trend for one supported physical measurement.
+// TH: แสดงค่าเฉลี่ยและแนวโน้มสั้นของค่าที่อุปกรณ์วัดจริงหนึ่งชนิด
 class _MetricSummaryCard extends StatelessWidget {
   const _MetricSummaryCard({
     required this.metric,
@@ -273,7 +237,7 @@ class _MetricSummaryCard extends StatelessWidget {
               ),
               SizedBox(height: compact ? 7 : 10),
               Text(
-                metric.title,
+                _localizedMetricTitle(context, metric),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: (compact ? textTheme.labelMedium : textTheme.labelLarge)
@@ -329,6 +293,8 @@ class _MetricSummaryCard extends StatelessWidget {
   }
 }
 
+// EN: Draw a compact trend from at most 24 recent physical readings.
+// TH: วาดแนวโน้มย่อจากค่าจริงล่าสุดไม่เกิน 24 รายการ
 class _MetricSparklineChart extends StatelessWidget {
   const _MetricSparklineChart({
     required this.metric,
@@ -356,10 +322,10 @@ class _MetricSparklineChart extends StatelessWidget {
     final yPadding = (maxY - minY).abs() < 1 ? 1.0 : (maxY - minY) * 0.15;
 
     if (spots.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
-          'No graph data',
-          style: TextStyle(color: Color(0xFFA7B0C0), fontSize: 11),
+          uiText(context, english: 'No graph data', thai: 'ยังไม่มีข้อมูลกราฟ'),
+          style: const TextStyle(color: Color(0xFFA7B0C0), fontSize: 11),
         ),
       );
     }
@@ -368,8 +334,8 @@ class _MetricSparklineChart extends StatelessWidget {
       LineChartData(
         minX: 0,
         maxX: spots.length <= 1 ? 1 : (spots.length - 1).toDouble(),
-        minY: metric.id == 'alerts' ? 0 : minY - yPadding,
-        maxY: metric.id == 'alerts' ? 3 : maxY + yPadding,
+        minY: minY - yPadding,
+        maxY: maxY + yPadding,
         gridData: const FlGridData(show: false),
         borderData: FlBorderData(show: false),
         titlesData: const FlTitlesData(
@@ -528,7 +494,9 @@ class _HistoryRow extends StatelessWidget {
 }
 
 class _EmptyHistory extends StatelessWidget {
-  const _EmptyHistory();
+  const _EmptyHistory({this.message});
+
+  final String? message;
 
   @override
   Widget build(BuildContext context) {
@@ -539,14 +507,18 @@ class _EmptyHistory extends StatelessWidget {
         color: const Color(0xFF0B0D12),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: const Text(
-        'No history data yet.',
-        style: TextStyle(color: Color(0xFFA7B0C0)),
+      child: Text(
+        message ??
+            uiText(context,
+                english: 'No history data yet.', thai: 'ยังไม่มีข้อมูลประวัติ'),
+        style: const TextStyle(color: Color(0xFFA7B0C0)),
       ),
     );
   }
 }
 
+// EN: Open a time-grouped detail page for a selected sensor channel.
+// TH: เปิดหน้ารายละเอียดแยกตามช่วงเวลาของช่องเซนเซอร์ที่เลือก
 class _HistoryDetailScreen extends StatefulWidget {
   const _HistoryDetailScreen({required this.metric});
 
@@ -562,14 +534,10 @@ class _HistoryDetailScreenState extends State<_HistoryDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<DozState>();
-    final samples = state.sensorRiskHistory.isEmpty
-        ? [
-            SensorRiskSample(
-              sensorData: state.currentSensor,
-              riskResult: state.currentRisk,
-            ),
-          ]
-        : state.sensorRiskHistory;
+    final samples = state.sensorRiskHistory
+        .where((sample) =>
+            sample.sensorData.rawRed != null && sample.sensorData.rawIr != null)
+        .toList();
     final bars = _buildBarData(widget.metric, samples, _range);
     final values = bars.map((item) => item.value);
     final average = values.average();
@@ -591,7 +559,7 @@ class _HistoryDetailScreenState extends State<_HistoryDetailScreen> {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    widget.metric.title,
+                    _localizedMetricTitle(context, widget.metric),
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.w900,
@@ -650,8 +618,8 @@ class _DetailStatRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final averageLabel = metric.id == 'alerts' ? 'Avg Level' : 'Avg';
-    final maxLabel = metric.id == 'alerts' ? 'Max Level' : 'Max';
+    final averageLabel = uiText(context, english: 'Average', thai: 'ค่าเฉลี่ย');
+    final maxLabel = uiText(context, english: 'Maximum', thai: 'ค่าสูงสุด');
     return Row(
       children: [
         Expanded(
@@ -670,12 +638,18 @@ class _DetailStatRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        Expanded(child: _CountStat(label: 'Bars', value: count)),
+        Expanded(
+            child: _CountStat(
+                label:
+                    uiText(context, english: 'Samples', thai: 'จำนวนตัวอย่าง'),
+                value: count)),
       ],
     );
   }
 }
 
+// EN: Plot mean readings by time bucket, including signed gyroscope values.
+// TH: วาดค่าเฉลี่ยตามช่วงเวลา รวมค่าการหมุนที่อาจติดลบ
 class _HistoryBarChart extends StatelessWidget {
   const _HistoryBarChart({
     required this.metric,
@@ -690,12 +664,17 @@ class _HistoryBarChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 600;
-    final maxY = bars.isEmpty
-        ? 1.0
-        : bars.map((item) => item.value).reduce((a, b) => a > b ? a : b);
-    final paddedMaxY = metric.id == 'alerts'
-        ? (maxY < 3 ? 3.0 : maxY + 1)
-        : (maxY <= 0 ? 1.0 : maxY * 1.18);
+    // EN: Include zero and both signed extremes so negative gyro bars remain visible.
+    // TH: ให้แกนครอบคลุมศูนย์และค่าทั้งสองทิศเพื่อไม่ตัดแท่ง gyro ที่ติดลบ
+    final values = bars.map((item) => item.value).toList();
+    final minValue =
+        values.isEmpty ? 0.0 : values.reduce((a, b) => a < b ? a : b);
+    final maxValue =
+        values.isEmpty ? 0.0 : values.reduce((a, b) => a > b ? a : b);
+    final span = (maxValue - minValue).abs();
+    final padding = span < 1 ? 1.0 : span * 0.18;
+    final chartMinY = minValue < 0 ? minValue - padding : 0.0;
+    final chartMaxY = maxValue > 0 ? maxValue + padding : 0.0;
 
     return Container(
       height: compact ? 320 : 380,
@@ -706,15 +685,11 @@ class _HistoryBarChart extends StatelessWidget {
         border: Border.all(color: const Color(0xFF232833)),
       ),
       child: bars.isEmpty
-          ? const Center(
-              child: Text(
-                'No history data yet.',
-                style: TextStyle(color: Color(0xFFA7B0C0)),
-              ),
-            )
+          ? const Center(child: _EmptyHistory())
           : BarChart(
               BarChartData(
-                maxY: paddedMaxY,
+                minY: chartMinY,
+                maxY: chartMaxY <= chartMinY ? chartMinY + 1 : chartMaxY,
                 alignment: BarChartAlignment.spaceAround,
                 gridData: FlGridData(
                   show: true,
@@ -739,7 +714,8 @@ class _HistoryBarChart extends StatelessWidget {
                     sideTitles: SideTitles(showTitles: false),
                   ),
                   leftTitles: AxisTitles(
-                    axisNameWidget: _ChartAxisName(_metricAxisName(metric)),
+                    axisNameWidget:
+                        _ChartAxisName(_metricAxisName(context, metric)),
                     axisNameSize: 20,
                     sideTitles: SideTitles(
                       showTitles: true,
@@ -749,7 +725,8 @@ class _HistoryBarChart extends StatelessWidget {
                     ),
                   ),
                   bottomTitles: AxisTitles(
-                    axisNameWidget: _ChartAxisName(_rangeAxisName(range)),
+                    axisNameWidget:
+                        _ChartAxisName(_rangeAxisName(context, range)),
                     axisNameSize: 22,
                     sideTitles: SideTitles(
                       showTitles: true,
@@ -811,7 +788,7 @@ class _HistoryValueList extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Values',
+            uiText(context, english: 'Values', thai: 'ค่า'),
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w900,
@@ -825,9 +802,11 @@ class _HistoryValueList extends StatelessWidget {
               (item) => _HistoryRow(
                 time: item.fullLabel,
                 value: _formatMetricValue(item.value, metric.unit),
-                subtitle: metric.id == 'alerts'
-                    ? 'Average alert level'
-                    : 'Average ${metric.title}',
+                subtitle: uiText(context,
+                    english:
+                        'Average ${_localizedMetricTitle(context, metric)}',
+                    thai:
+                        'ค่าเฉลี่ย ${_localizedMetricTitle(context, metric)}'),
               ),
             ),
         ],
@@ -855,6 +834,8 @@ List<_HistoryBarData> _buildBarData(
   List<SensorRiskSample> samples,
   String range,
 ) {
+  // EN: Group recent physical readings by the selected time granularity.
+  // TH: รวมค่าจริงล่าสุดตามหน่วยช่วงเวลาที่เลือก
   final now = DateTime.now();
   final cutoff = switch (range) {
     'Day' => now.subtract(const Duration(hours: 24)),
@@ -925,19 +906,36 @@ String _bucketFullLabel(DateTime timestamp, String range) {
   };
 }
 
-String _rangeAxisName(String range) {
+String _rangeAxisName(BuildContext context, String range) {
+  final isThai = Localizations.localeOf(context).languageCode == 'th';
   return switch (range) {
-    'Day' => 'Hour',
-    'Week' => 'Day',
-    'Month' => 'Day',
-    'Year' => 'Month',
-    _ => 'Time',
+    'Day' => isThai ? 'ชั่วโมง' : 'Hour',
+    'Week' => isThai ? 'วัน' : 'Day',
+    'Month' => isThai ? 'วัน' : 'Day',
+    'Year' => isThai ? 'เดือน' : 'Month',
+    _ => isThai ? 'เวลา' : 'Time',
   };
 }
 
-String _metricAxisName(_HistoryMetric metric) {
-  if (metric.id == 'alerts') return 'Alert Level';
-  return metric.unit.isEmpty ? metric.title : metric.unit;
+String _metricAxisName(BuildContext context, _HistoryMetric metric) {
+  return metric.unit.isEmpty
+      ? _localizedMetricTitle(context, metric)
+      : metric.unit;
+}
+
+String _localizedMetricTitle(BuildContext context, _HistoryMetric metric) {
+  final isThai = Localizations.localeOf(context).languageCode == 'th';
+  return switch (metric.id) {
+    'redMean' => isThai ? 'ค่าเฉลี่ย Red (MAX30102)' : 'MAX30102 Red mean',
+    'irMean' => isThai ? 'ค่าเฉลี่ย IR (MAX30102)' : 'MAX30102 IR mean',
+    'accelX' => isThai ? 'ความเร่งแกน X (MPU6050)' : 'MPU6050 acceleration X',
+    'accelY' => isThai ? 'ความเร่งแกน Y (MPU6050)' : 'MPU6050 acceleration Y',
+    'accelZ' => isThai ? 'ความเร่งแกน Z (MPU6050)' : 'MPU6050 acceleration Z',
+    'gyroX' => isThai ? 'ไจโรสโคปแกน X (MPU6050)' : 'MPU6050 gyroscope X',
+    'gyroY' => isThai ? 'ไจโรสโคปแกน Y (MPU6050)' : 'MPU6050 gyroscope Y',
+    'gyroZ' => isThai ? 'ไจโรสโคปแกน Z (MPU6050)' : 'MPU6050 gyroscope Z',
+    _ => metric.title,
+  };
 }
 
 String _formatShortMetric(double value) {
@@ -1022,23 +1020,14 @@ class _HistoryMetric {
 
 double _metricValue(String metricId, SensorRiskSample sample) {
   return switch (metricId) {
-    'heartRate' => sample.sensorData.heartRate.toDouble(),
-    'spo2' => sample.sensorData.spo2.toDouble(),
-    'ecgRate' => sample.sensorData.ecgRate.toDouble(),
-    'ecgRrInterval' => sample.sensorData.ecgRrInterval,
-    'ecgHrv' => sample.sensorData.ecgHrv,
-    'gsr' => sample.sensorData.gsr,
-    'temperature' => sample.sensorData.temperature,
-    'stress' => sample.sensorData.stressLevel.toDouble(),
+    'redMean' => sample.sensorData.rawRed?.toDouble() ?? 0,
+    'irMean' => sample.sensorData.rawIr?.toDouble() ?? 0,
     'accelX' => sample.sensorData.accelX,
     'accelY' => sample.sensorData.accelY,
     'accelZ' => sample.sensorData.accelZ,
     'gyroX' => sample.sensorData.gyroX,
     'gyroY' => sample.sensorData.gyroY,
     'gyroZ' => sample.sensorData.gyroZ,
-    'motionMagnitude' => sample.sensorData.motionMagnitude,
-    'gyroMagnitude' => sample.sensorData.gyroMagnitude,
-    'alerts' => sample.riskResult.levelValue.toDouble(),
     _ => 0,
   };
 }

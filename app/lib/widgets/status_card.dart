@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 import 'alert_level_badge.dart';
+import '../ui_text.dart';
 
+// EN: Display the current risk state and guidance supplied by the caller.
+// TH: แสดงสถานะความเสี่ยงและคำแนะนำที่ผู้เรียกส่งมา โดยไม่ประเมินความเสี่ยงเอง
 class StatusCard extends StatelessWidget {
   const StatusCard({
     super.key,
@@ -12,16 +15,27 @@ class StatusCard extends StatelessWidget {
     this.disclaimer = '',
   });
 
-  final String status;
-  final String alertLevel;
-  final String recommendation;
-  final String cause; // สาเหตุที่ตรวจพบ (จาก AI advice, ถ้ามี)
-  final String disclaimer; // ข้อความปฏิเสธความรับผิด (จาก AI advice, ถ้ามี)
+  final String
+      status; // EN: User-facing status text. TH: ข้อความสถานะสำหรับผู้ใช้
+  final String
+      alertLevel; // EN: Canonical level for the badge. TH: ระดับมาตรฐานที่ใช้กับป้ายแจ้งเตือน
+  final String
+      recommendation; // EN: Advice or an unavailable-analysis message. TH: คำแนะนำหรือข้อความว่ายังวิเคราะห์ไม่ได้
+  final String
+      cause; // EN: Optional AI explanation. TH: สาเหตุจาก AI เมื่อมีข้อมูล
+  final String
+      disclaimer; // EN: Optional AI caution. TH: ข้อความกำกับจาก AI เมื่อมีข้อมูล
 
   @override
   Widget build(BuildContext context) {
+    // EN: Use tighter spacing on narrow screens. TH: ลดระยะห่างเมื่อหน้าจอแคบ
     final compact = MediaQuery.sizeOf(context).width < 600;
     final textTheme = Theme.of(context).textTheme;
+    // EN: Unknown means analysis is unavailable, never a safe result.
+    // TH: Unknown หมายถึงยังวิเคราะห์ไม่ได้ ไม่ใช่ผลว่าปลอดภัย
+    final analysisUnavailable = alertLevel.toLowerCase() == 'unknown';
+    final statusAccent =
+        analysisUnavailable ? const Color(0xFF9AA4B2) : const Color(0xFF34D399);
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(compact ? 14 : 20),
@@ -45,6 +59,7 @@ class StatusCard extends StatelessWidget {
               Icon(
                 Icons.health_and_safety_outlined,
                 size: compact ? 26 : 32,
+                color: analysisUnavailable ? statusAccent : null,
               ),
               SizedBox(width: compact ? 10 : 12),
               Expanded(
@@ -57,6 +72,8 @@ class StatusCard extends StatelessWidget {
                   ),
                 ),
               ),
+              // EN: Render the passed alert level beside its status text.
+              // TH: แสดงระดับแจ้งเตือนที่ได้รับข้างข้อความสถานะ
               AlertLevelBadge(level: alertLevel),
             ],
           ),
@@ -67,26 +84,43 @@ class StatusCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: const Color(0xFF0E1622),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF1E3A2F)),
+              border: Border.all(
+                color: analysisUnavailable
+                    ? const Color(0xFF343B4A)
+                    : const Color(0xFF1E3A2F),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  children: const [
-                    Icon(Icons.tips_and_updates_outlined,
-                        size: 18, color: Color(0xFF34D399)),
-                    SizedBox(width: 6),
+                  children: [
+                    Icon(
+                      analysisUnavailable
+                          ? Icons.info_outline_rounded
+                          : Icons.tips_and_updates_outlined,
+                      size: 18,
+                      color: statusAccent,
+                    ),
+                    const SizedBox(width: 6),
                     Text(
-                      'คำแนะนำ',
+                      uiText(context,
+                          english: analysisUnavailable
+                              ? 'Analysis status'
+                              : 'Recommendation',
+                          thai: analysisUnavailable
+                              ? 'สถานะการวิเคราะห์'
+                              : 'คำแนะนำ'),
                       style: TextStyle(
-                        color: Color(0xFF34D399),
+                        color: statusAccent,
                         fontWeight: FontWeight.w800,
                         fontSize: 13,
                       ),
                     ),
                   ],
                 ),
+                // EN: Show an explanation only when one was provided.
+                // TH: แสดงสาเหตุเฉพาะเมื่อได้รับข้อความมา
                 if (cause.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
@@ -107,6 +141,8 @@ class StatusCard extends StatelessWidget {
               ],
             ),
           ),
+          // EN: Keep optional AI cautions visible below the guidance.
+          // TH: แสดงข้อความกำกับ AI ใต้คำแนะนำเมื่อมีข้อมูล
           if (disclaimer.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(

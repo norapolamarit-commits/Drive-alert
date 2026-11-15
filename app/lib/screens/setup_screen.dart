@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../legal/privacy_policy.dart';
 import '../main.dart';
+import '../ui_text.dart';
 
 class SetupScreen extends StatefulWidget {
   const SetupScreen({super.key});
@@ -12,42 +15,22 @@ class SetupScreen extends StatefulWidget {
 }
 
 class _SetupScreenState extends State<SetupScreen> {
-  final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
-  late final TextEditingController _weightController;
-  late final TextEditingController _heightController;
-  late final TextEditingController _birthDateController;
-  late final TextEditingController _conditionsController;
-  DateTime? _birthDate;
   DateTime? _privacyAcceptedAt;
-  String _gender = 'Female';
   bool _privacyAccepted = false;
-  bool _privacyPolicyShown = false;
+
+  String _copy(String en, String th) => uiText(context, english: en, thai: th);
 
   @override
   void initState() {
     super.initState();
     final state = context.read<DozState>();
     _nameController = TextEditingController(text: state.userName);
-    _weightController =
-        TextEditingController(text: state.weight.toStringAsFixed(0));
-    _heightController =
-        TextEditingController(text: state.height.toStringAsFixed(0));
-    final estimatedBirthDate = state.birthDate ?? _birthDateFromAge(state.age);
-    _birthDate = estimatedBirthDate;
-    _birthDateController =
-        TextEditingController(text: _formatBirthDate(estimatedBirthDate));
-    _conditionsController = TextEditingController(text: state.conditions);
-    _gender = state.gender;
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _weightController.dispose();
-    _heightController.dispose();
-    _birthDateController.dispose();
-    _conditionsController.dispose();
     super.dispose();
   }
 
@@ -55,90 +38,99 @@ class _SetupScreenState extends State<SetupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              const SizedBox(height: 24),
-              const _SetupHero(),
-              const SizedBox(height: 28),
-              TextFormField(
-                controller: _nameController,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(labelText: 'Name / ชื่อ'),
-                validator: (value) {
-                  if ((value ?? '').trim().isEmpty) return 'Required';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              _BirthDateField(
-                controller: _birthDateController,
-                onTap: _selectBirthDate,
-              ),
-              const SizedBox(height: 12),
-              _NumberField(
-                  controller: _weightController,
-                  label: 'Weight (kg) / น้ำหนัก'),
-              const SizedBox(height: 12),
-              _NumberField(
-                  controller: _heightController,
-                  label: 'Height (cm) / ส่วนสูง'),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _gender,
-                decoration: const InputDecoration(labelText: 'Gender'),
-                dropdownColor: const Color(0xFF11141B),
-                items: const ['Female', 'Male', 'Other']
-                    .map((item) =>
-                        DropdownMenuItem(value: item, child: Text(item)))
-                    .toList(),
-                onChanged: (value) =>
-                    setState(() => _gender = value ?? _gender),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _conditionsController,
-                minLines: 3,
-                maxLines: 5,
-                decoration: const InputDecoration(
-                  labelText:
-                      'Underlying disease / medical conditions / โรคประจำตัว',
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: AppLanguageToggle(
+                language: context.watch<DozState>().language,
+                onChanged: (language) => unawaited(
+                  context
+                      .read<DozState>()
+                      .updateSettings(newLanguage: language),
                 ),
               ),
-              const SizedBox(height: 12),
-              _PrivacyPolicyAccept(
-                accepted: _privacyAccepted,
-                onChanged: _handlePrivacyAccepted,
-                onShowPolicy: _openPrivacyPolicyFromLink,
+            ),
+            const SizedBox(height: 24),
+            const _SetupHero(),
+            const SizedBox(height: 28),
+            TextFormField(
+              controller: _nameController,
+              textInputAction: TextInputAction.next,
+              textCapitalization: TextCapitalization.words,
+              maxLength: 40,
+              buildCounter: (context,
+                      {required currentLength,
+                      required isFocused,
+                      maxLength}) =>
+                  null,
+              decoration: InputDecoration(
+                labelText: _copy('Name (optional)', 'ชื่อเล่น (ไม่บังคับ)'),
+                hintText:
+                    _copy('What should we call you?', 'ต้องการให้เรียกว่าอะไร'),
+                prefixIcon: const Icon(Icons.person_outline),
               ),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: _privacyAccepted ? _submit : null,
-                child: const Text('Login'),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF11141B),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFF232833)),
               ),
-            ],
-          ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.privacy_tip_outlined,
+                      color: Color(0xFF55D6A7)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _copy(
+                        'No health details are needed to start. Age, weight, height, gender, and conditions are not used by the current sensor display or analysis. You can add profile details later if you choose.',
+                        'เริ่มใช้งานได้โดยไม่ต้องกรอกข้อมูลสุขภาพ อายุ น้ำหนัก ส่วนสูง เพศ และโรคประจำตัวยังไม่ถูกใช้กับการแสดงผลหรือวิเคราะห์เซนเซอร์ปัจจุบัน หากต้องการสามารถเพิ่มในโปรไฟล์ภายหลังได้',
+                      ),
+                      style: const TextStyle(
+                          color: Color(0xFFA7B0C0), height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _PrivacyPolicyAccept(
+              accepted: _privacyAccepted,
+              onChanged: _handlePrivacyAccepted,
+              onShowPolicy: _openPrivacyPolicyFromLink,
+            ),
+            const SizedBox(height: 12),
+            FilledButton(
+              onPressed: _privacyAccepted ? _submit : null,
+              child: Text(_copy('Continue', 'ดำเนินการต่อ')),
+            ),
+          ],
         ),
       ),
     );
   }
 
   void _submit() {
-    if (!_formKey.currentState!.validate()) return;
-    final birthDate = _birthDate;
-    if (birthDate == null) return;
-    context.read<DozState>().completeSetup(
-          newName: _nameController.text,
-          newPrivacyPolicyAcceptedAt: _privacyAcceptedAt ?? DateTime.now(),
-          newWeight: double.parse(_weightController.text),
-          newHeight: double.parse(_heightController.text),
-          newAge: _ageFromBirthDate(birthDate),
-          newBirthDate: birthDate,
-          newGender: _gender,
-          newConditions: _conditionsController.text,
-        );
+    final state = context.read<DozState>();
+    state.completeSetup(
+      newName: _nameController.text.trim().isEmpty
+          ? _copy('Doz user', 'ผู้ใช้ doz')
+          : _nameController.text.trim(),
+      newPrivacyPolicyAcceptedAt: _privacyAcceptedAt ?? DateTime.now(),
+      newWeight: state.weight,
+      newHeight: state.height,
+      newAge: state.age,
+      newBirthDate: state.birthDate,
+      newGender: state.gender,
+      newConditions: state.conditions,
+      newProfileDetailsProvided: false,
+    );
   }
 
   Future<void> _handlePrivacyAccepted(bool? value) async {
@@ -151,26 +143,26 @@ class _SetupScreenState extends State<SetupScreen> {
       return;
     }
 
-    if (!_privacyPolicyShown) {
-      _privacyPolicyShown = true;
-      final dialogAccepted = await showPrivacyPolicyDialog(context);
-      if (!mounted) return;
-      setState(() {
-        _privacyAccepted = dialogAccepted;
-        _privacyAcceptedAt = dialogAccepted ? DateTime.now() : null;
-      });
-      return;
-    }
-
+    final dialogAccepted = await showPrivacyPolicyDialog(
+      context,
+      initialLanguage: Localizations.localeOf(context).languageCode == 'th'
+          ? 'Thai'
+          : 'English',
+    );
+    if (!mounted) return;
     setState(() {
-      _privacyAccepted = true;
-      _privacyAcceptedAt ??= DateTime.now();
+      _privacyAccepted = dialogAccepted;
+      _privacyAcceptedAt = dialogAccepted ? DateTime.now() : null;
     });
   }
 
   Future<bool> _openPrivacyPolicyFromLink() async {
-    _privacyPolicyShown = true;
-    final accepted = await showPrivacyPolicyDialog(context);
+    final accepted = await showPrivacyPolicyDialog(
+      context,
+      initialLanguage: Localizations.localeOf(context).languageCode == 'th'
+          ? 'Thai'
+          : 'English',
+    );
     if (!mounted) return accepted;
     if (accepted) {
       setState(() {
@@ -179,55 +171,6 @@ class _SetupScreenState extends State<SetupScreen> {
       });
     }
     return accepted;
-  }
-
-  Future<void> _selectBirthDate() async {
-    final now = DateTime.now();
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: _birthDate ?? _birthDateFromAge(20),
-      firstDate: DateTime(now.year - 120),
-      lastDate: now,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: Colors.white,
-              onPrimary: Colors.black,
-              surface: Color(0xFF11141B),
-              onSurface: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (selected == null) return;
-    setState(() {
-      _birthDate = selected;
-      _birthDateController.text = _formatBirthDate(selected);
-    });
-  }
-
-  DateTime _birthDateFromAge(int age) {
-    final now = DateTime.now();
-    return DateTime(now.year - age, now.month, now.day);
-  }
-
-  int _ageFromBirthDate(DateTime birthDate) {
-    final now = DateTime.now();
-    var age = now.year - birthDate.year;
-    final hasNotHadBirthdayThisYear = now.month < birthDate.month ||
-        (now.month == birthDate.month && now.day < birthDate.day);
-    if (hasNotHadBirthdayThisYear) age -= 1;
-    return age.clamp(0, 120);
-  }
-
-  String _formatBirthDate(DateTime date) {
-    final year = date.year.toString().padLeft(4, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-    return '$year-$month-$day';
   }
 }
 
@@ -244,6 +187,7 @@ class _PrivacyPolicyAccept extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    String copy(String en, String th) => uiText(context, english: en, thai: th);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -265,18 +209,18 @@ class _PrivacyPolicyAccept extends StatelessWidget {
             child: Wrap(
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                const Text(
-                  'I accept the ',
-                  style: TextStyle(color: Colors.white, height: 1.35),
+                Text(
+                  copy('I have read and understand the ', 'ฉันอ่านและเข้าใจ'),
+                  style: const TextStyle(color: Colors.white, height: 1.35),
                 ),
                 InkWell(
                   borderRadius: BorderRadius.circular(4),
                   onTap: onShowPolicy,
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 2),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
                     child: Text(
-                      'Privacy Policy',
-                      style: TextStyle(
+                      copy(' privacy notice ', 'ประกาศความเป็นส่วนตัว'),
+                      style: const TextStyle(
                         color: Colors.white,
                         decoration: TextDecoration.underline,
                         decorationColor: Colors.white,
@@ -286,9 +230,12 @@ class _PrivacyPolicyAccept extends StatelessWidget {
                     ),
                   ),
                 ),
-                const Text(
-                  ' and allow doz to use my health, BLE, and location data for monitoring.',
-                  style: TextStyle(color: Colors.white, height: 1.35),
+                Text(
+                  copy(
+                    ' This acknowledgement only confirms that you understand this draft. It is not consent to remote AI or cloud health-data sync. Remote AI asks separately before sending data; cloud health-data sync is currently disabled.',
+                    ' การยืนยันนี้เป็นเพียงการรับทราบและเข้าใจประกาศฉบับร่าง ไม่ใช่การยินยอมใช้ AI ระยะไกลหรือซิงก์ข้อมูลสุขภาพขึ้นคลาวด์ หากใช้ AI ระยะไกลจะขอความยินยอมแยกก่อนส่งข้อมูล ส่วน cloud sync ปิดใช้อยู่ในปัจจุบัน',
+                  ),
+                  style: const TextStyle(color: Colors.white, height: 1.35),
                 ),
               ],
             ),
@@ -304,6 +251,11 @@ class _SetupHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final description = uiText(
+      context,
+      english: 'Start with the essentials; health details are optional',
+      thai: 'เริ่มด้วยข้อมูลเท่าที่จำเป็น ข้อมูลสุขภาพไม่บังคับ',
+    );
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -340,65 +292,15 @@ class _SetupHero extends StatelessWidget {
                       ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'Set up your profile and start health monitoring',
-                  style: TextStyle(color: Color(0xFFA7B0C0)),
+                Text(
+                  description,
+                  style: const TextStyle(color: Color(0xFFA7B0C0)),
                 ),
               ],
             ),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _NumberField extends StatelessWidget {
-  const _NumberField({required this.controller, required this.label});
-
-  final TextEditingController controller;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: TextInputType.number,
-      decoration: InputDecoration(labelText: label),
-      validator: (value) {
-        final number = num.tryParse(value ?? '');
-        if (number == null || number <= 0) return 'Required';
-        return null;
-      },
-    );
-  }
-}
-
-class _BirthDateField extends StatelessWidget {
-  const _BirthDateField({
-    required this.controller,
-    required this.onTap,
-  });
-
-  final TextEditingController controller;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      readOnly: true,
-      onTap: onTap,
-      decoration: const InputDecoration(
-        labelText: 'Birth date / วันเกิด',
-        suffixIcon: Icon(Icons.calendar_month_outlined),
-      ),
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) {
-          return 'Required';
-        }
-        return null;
-      },
     );
   }
 }
