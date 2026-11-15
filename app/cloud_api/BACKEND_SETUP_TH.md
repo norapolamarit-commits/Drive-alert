@@ -10,7 +10,7 @@
 
 ## สิ่งที่ต้องตั้งค่าในบัญชีของโครงการ
 
-1. เปิด Google Sheets API ใน Google Cloud project ที่ต้องการใช้
+1. ใช้ Google Cloud project `doz-backend` (สร้างแล้ว) ซึ่งเปิด Google Sheets API แล้ว
 2. สร้าง service account และ JSON key สำหรับเซิร์ฟเวอร์
 3. แชร์ชีตต้นแบบให้ **อีเมลของ service account** เป็น Editor โดยไม่เปิดเป็น public
 4. ใส่ค่าต่อไปนี้ใน Environment ของ Render service `Drive-alert` โดยตรง:
