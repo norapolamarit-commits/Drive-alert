@@ -150,6 +150,21 @@ class PreflightChatTests(unittest.TestCase):
         with patch("sys.argv", ["preflight_chat.py"]):
             self.assertEqual(preflight_chat.main(), 2)
 
+    @patch.dict(os.environ, {"DOZ_API_BASE_URL": "https://api.example.org"}, clear=True)
+    @patch("preflight_chat.request_json")
+    def test_public_only_checks_readiness_and_invalid_tokens(self, request_json):
+        request_json.side_effect = [(200, {"status": "ready"}), (401, None), (401, None)]
+        with patch("sys.argv", ["preflight_chat.py", "--public-only"]):
+            self.assertEqual(preflight_chat.main(), 0)
+        self.assertEqual(request_json.call_count, 3)
+
+    @patch.dict(os.environ, {"DOZ_API_BASE_URL": "https://api.example.org"}, clear=True)
+    @patch("preflight_chat.request_json")
+    def test_public_only_rejects_unprotected_advice(self, request_json):
+        request_json.side_effect = [(200, {"status": "ready"}), (401, None), (200, {"advice": "oops"})]
+        with patch("sys.argv", ["preflight_chat.py", "--public-only"]):
+            self.assertEqual(preflight_chat.main(), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

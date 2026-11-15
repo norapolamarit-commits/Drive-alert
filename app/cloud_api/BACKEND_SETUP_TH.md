@@ -30,6 +30,8 @@
 
 จากเครื่องพัฒนา รัน `python3 -m pytest app/cloud_api -q` ที่ราก repo เพื่อตรวจ logic โดยไม่ส่งข้อมูลจริง จากนั้นตรวจ `GET /health` (process), `GET /ready` (Auth และ storage เมื่อเปิด sync) โดยไม่ส่ง credential ใน URL หาก `/ready` ตอบ 503 ให้ตรวจ environment, การแชร์ชีต และชื่อแท็บผ่าน Render logs โดยไม่พิมพ์ JSON key ลง log
 
+ตรวจ deploy แบบไม่ต้องใช้บัญชีทดสอบด้วย `DOZ_API_BASE_URL=https://drive-alert.onrender.com python3 app/cloud_api/preflight_chat.py --public-only` คำสั่งนี้ตรวจ `/ready` และตรวจว่า `/chat` กับ `/advice` ปฏิเสธ token ผิดด้วย HTTP 401 เท่านั้น หากต้องการตรวจคำตอบแชตจริง ให้ใช้บัญชีทดสอบที่มี token อายุสั้นและรันโดยไม่ใส่ `--public-only`
+
 ## ข้อจำกัดที่ต้องแก้ก่อนใช้งานจริง
 
 Google Sheets มีโควตาคำขอและขีดจำกัด 2,000 แถวข้อมูลต่อแท็บใน adapter นี้ ไม่เหมาะกับ raw sensor ต่อเนื่องทุกวินาที การล้างเซลล์ไม่รับประกันการลบจาก version history ดังนั้น `DELETE /account` จะปฏิเสธเมื่อเลือก Sheets และแอปยังปิด health sync อยู่ ต้องเลือก storage ที่รองรับการลบและ retention จริงก่อนใช้กับข้อมูลสุขภาพของผู้ใช้ทั่วไป
