@@ -8,6 +8,8 @@ import '../main.dart';
 import '../ui_text.dart';
 
 class SetupScreen extends StatefulWidget {
+  // EN: Collect the minimum local profile information at first launch.
+  // TH: รับข้อมูลโปรไฟล์ขั้นต่ำในเครื่องเมื่อเปิดใช้ครั้งแรก
   const SetupScreen({super.key});
 
   @override
@@ -15,6 +17,8 @@ class SetupScreen extends StatefulWidget {
 }
 
 class _SetupScreenState extends State<SetupScreen> {
+  // EN: Record consent only after the user accepts the actual notice dialog.
+  // TH: บันทึกความยินยอมหลังผู้ใช้กดยอมรับในหน้าประกาศจริงเท่านั้น
   late final TextEditingController _nameController;
   DateTime? _privacyAcceptedAt;
   bool _privacyAccepted = false;
@@ -117,12 +121,15 @@ class _SetupScreenState extends State<SetupScreen> {
   }
 
   void _submit() {
+    // EN: A button state is not an authorization check; require recorded consent.
+    // TH: สถานะปุ่มไม่ใช่หลักฐานยินยอม จึงต้องตรวจเวลาที่ยอมรับด้วย
+    if (!_privacyAccepted || _privacyAcceptedAt == null) return;
     final state = context.read<DozState>();
     state.completeSetup(
       newName: _nameController.text.trim().isEmpty
           ? _copy('Doz user', 'ผู้ใช้ doz')
           : _nameController.text.trim(),
-      newPrivacyPolicyAcceptedAt: _privacyAcceptedAt ?? DateTime.now(),
+      newPrivacyPolicyAcceptedAt: _privacyAcceptedAt!,
       newWeight: state.weight,
       newHeight: state.height,
       newAge: state.age,
@@ -134,6 +141,8 @@ class _SetupScreenState extends State<SetupScreen> {
   }
 
   Future<void> _handlePrivacyAccepted(bool? value) async {
+    // EN: Clearing the checkbox also clears the earlier consent timestamp.
+    // TH: เมื่อยกเลิกการเลือก ให้ล้างเวลายินยอมที่เคยบันทึกไว้
     final accepted = value ?? false;
     if (!accepted) {
       setState(() {
@@ -157,6 +166,8 @@ class _SetupScreenState extends State<SetupScreen> {
   }
 
   Future<bool> _openPrivacyPolicyFromLink() async {
+    // EN: Accepting through the notice link follows the same recorded-consent path.
+    // TH: การยอมรับผ่านลิงก์ประกาศต้องบันทึกความยินยอมแบบเดียวกัน
     final accepted = await showPrivacyPolicyDialog(
       context,
       initialLanguage: Localizations.localeOf(context).languageCode == 'th'
