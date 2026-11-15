@@ -6,7 +6,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 import main
-from sheets_storage import HEADERS, SheetsStorageError, SheetsStore
+from sheets_storage import HEADERS, SheetsStorageError, SheetsStore, store_from_env
 
 
 class _Response:
@@ -45,6 +45,22 @@ class SheetsStoreTests(unittest.TestCase):
     def setUp(self):
         self.session = _Session()
         self.store = SheetsStore("a" * 30, '{"type":"service_account"}', session=self.session)
+
+    def test_partial_configuration_is_detected_without_credentials(self):
+        with patch.dict("os.environ", {"DOZ_SHEETS_SPREADSHEET_ID": "a" * 30, "DOZ_GOOGLE_SERVICE_ACCOUNT_JSON": ""}):
+            with self.assertRaises(SheetsStorageError):
+                store_from_env()
+
+    def test_invalid_sheets_setup_blocks_sync_even_with_memory_opt_in(self):
+        with patch.object(main, "_SHEETS_CONFIG_ERROR", True):
+            with patch.object(main, "_SHEETS_STORE", None):
+                with patch.dict("os.environ", {
+                    "SUPABASE_URL": "https://example.supabase.co",
+                    "SUPABASE_PUBLISHABLE_KEY": "public-test-key",
+                    "HEALTH_DATA_SYNC_ENABLED": "true",
+                    "HEALTH_DATA_MEMORY_STORAGE_ENABLED": "true",
+                }):
+                    self.assertEqual(TestClient(main.app).get("/ready").status_code, 503)
 
     def test_owner_isolated_read_raw_append_and_delete(self):
         self.store.append("sensor_events", {"authUserId": "alice", "receivedAt": "1", "value": "=HYPERLINK(\"x\")"})

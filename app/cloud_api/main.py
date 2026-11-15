@@ -288,7 +288,12 @@ ALERT_EVENTS: list[dict[str, Any]] = []
 FIRESTORE_COLLECTION_PREFIX = os.getenv("FIRESTORE_COLLECTION_PREFIX", "vita_guard")
 USE_FIRESTORE = os.getenv("USE_FIRESTORE", "").lower() in {"1", "true", "yes"}
 _FIRESTORE_CLIENT = firestore.Client() if USE_FIRESTORE and firestore else None
-_SHEETS_STORE = store_from_env()  # EN: Initialize the optional server-side Sheets backend. TH: เริ่มระบบ Sheets ฝั่งเซิร์ฟเวอร์เมื่อมี config
+try:  # EN: Keep the API online while a partial Sheets setup is being completed. TH: ให้ API ยังทำงานระหว่างตั้งค่า Sheets ที่ยังไม่ครบ
+    _SHEETS_STORE = store_from_env()  # EN: Initialize Sheets only with complete credentials. TH: เริ่ม Sheets เมื่อข้อมูลรับรองครบเท่านั้น
+    _SHEETS_CONFIG_ERROR = False  # EN: Record that the optional store is configured consistently. TH: บันทึกว่าการตั้งค่า storage ไม่ขัดแย้ง
+except SheetsStorageError:  # EN: Do not expose credentials or crash during configuration. TH: ไม่เปิดเผยข้อมูลรับรองหรือทำให้เซิร์ฟเวอร์ล้มระหว่างตั้งค่า
+    _SHEETS_STORE = None  # EN: Disable storage until its configuration is valid. TH: ปิด storage จนกว่าการตั้งค่าจะถูกต้อง
+    _SHEETS_CONFIG_ERROR = True  # EN: Block readiness and health routes if sync is enabled. TH: ปิด readiness และเส้นทางข้อมูลสุขภาพหากเปิด sync
 if _SHEETS_STORE and _FIRESTORE_CLIENT:
     raise RuntimeError("Choose exactly one persistent health-data backend")
 
@@ -383,7 +388,7 @@ def _require_health_data_sync_enabled() -> None:  # EN: Keep health-data routes 
         )  # EN: Stop before storage operations. TH: หยุดก่อนเข้าถึง storage
     # EN: Do not claim sync succeeded when only process memory is available.
     # TH: ห้ามแจ้งว่าสำเร็จเมื่อมีเพียงหน่วยความจำชั่วคราว เว้นแต่เปิด opt-in สำหรับพัฒนา
-    if not _FIRESTORE_CLIENT and not _SHEETS_STORE and not _memory_health_storage_enabled():  # EN: Require configured storage unless memory mode is explicitly enabled. TH: ต้องมี storage ที่ตั้งค่าไว้หรือเปิด memory mode ชัดเจน
+    if _SHEETS_CONFIG_ERROR or (not _FIRESTORE_CLIENT and not _SHEETS_STORE and not _memory_health_storage_enabled()):  # EN: Never fall back to memory after an invalid Sheets setup. TH: ไม่ใช้ memory แทนเมื่อการตั้งค่า Sheets ผิด
         raise HTTPException(  # EN: Fail closed when only non-durable storage exists. TH: ปิดการเขียนเมื่อมีแต่ storage ที่ไม่ถาวร
             status_code=503,  # EN: Report storage readiness failure. TH: แจ้งว่า storage ยังไม่พร้อม
             detail="Persistent health-data storage is unavailable.",  # EN: Avoid claiming durable sync. TH: ไม่กล่าวอ้างว่า sync แบบถาวรสำเร็จ
