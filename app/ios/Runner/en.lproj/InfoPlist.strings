@@ -1,0 +1,4 @@
+"NSBluetoothAlwaysUsageDescription" = "doz uses Bluetooth to find and connect to your Doz wearable and receive sensor readings. Bluetooth is not used to track your location.";
+"NSBluetoothPeripheralUsageDescription" = "doz uses Bluetooth to find and connect to your Doz wearable and receive sensor readings. Bluetooth is not used to track your location.";
+"NSLocationWhenInUseUsageDescription" = "doz uses your location only when you choose the optional location feature. Location is not required for Bluetooth or sensor monitoring.";
+"NSLocalNetworkUsageDescription" = "doz uses the local network only when you configure a development or mock server. Bluetooth sensor connection does not require local network access.";

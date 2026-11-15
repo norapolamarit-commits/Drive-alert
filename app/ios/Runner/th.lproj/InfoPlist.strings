@@ -1,0 +1,4 @@
+"NSBluetoothAlwaysUsageDescription" = "doz ใช้ Bluetooth เพื่อค้นหาและเชื่อมต่อกับอุปกรณ์สวมใส่ Doz และรับข้อมูลเซนเซอร์ โดยไม่ใช้ Bluetooth เพื่อติดตามตำแหน่งของคุณ";
+"NSBluetoothPeripheralUsageDescription" = "doz ใช้ Bluetooth เพื่อค้นหาและเชื่อมต่อกับอุปกรณ์สวมใส่ Doz และรับข้อมูลเซนเซอร์ โดยไม่ใช้ Bluetooth เพื่อติดตามตำแหน่งของคุณ";
+"NSLocationWhenInUseUsageDescription" = "doz ใช้ตำแหน่งเฉพาะเมื่อคุณเลือกใช้ฟังก์ชันตำแหน่งเสริมเท่านั้น ไม่จำเป็นต้องใช้ตำแหน่งเพื่อเชื่อมต่อ Bluetooth หรืออ่านเซนเซอร์";
+"NSLocalNetworkUsageDescription" = "doz ใช้เครือข่ายภายในเฉพาะเมื่อคุณตั้งค่าเซิร์ฟเวอร์สำหรับพัฒนาหรือจำลองการทำงาน การเชื่อมต่อเซนเซอร์ผ่าน Bluetooth ไม่ต้องใช้เครือข่ายภายใน";

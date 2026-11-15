@@ -1,0 +1,6 @@
+# Copy this file to android/key.properties and replace every value.
+# Keep android/key.properties and the keystore private; never commit either.
+storeFile=/absolute/path/to/doz-upload-key.jks
+storePassword=REPLACE_WITH_STORE_PASSWORD
+keyAlias=doz-upload
+keyPassword=REPLACE_WITH_KEY_PASSWORD
