@@ -8,9 +8,9 @@ void main() {
   test('accepted policy version matches the current draft in both languages',
       () {
     final state = DozState();
-    expect(state.privacyPolicyVersion, 'DRAFT-1.1');
-    expect(privacyPolicyTextTh, contains('ฉบับร่าง 1.1'));
-    expect(privacyPolicyTextEn, contains('Draft 1.1'));
+    expect(state.privacyPolicyVersion, 'DRAFT-1.2');
+    expect(privacyPolicyTextTh, contains('ฉบับร่าง 1.2'));
+    expect(privacyPolicyTextEn, contains('Draft 1.2'));
     expect(privacyPolicyTextTh, contains('ข้อความสนทนาใน chatbot'));
     expect(privacyPolicyTextEn, contains('Chatbot conversation messages'));
     expect(privacyPolicyTextTh, contains('แอปไม่อ่านหรือส่งพิกัดจากการ scan'));
@@ -33,6 +33,7 @@ void main() {
 
     expect(privacyPolicyTextEn, contains('DELETE /account'));
     expect(privacyPolicyTextEn, contains('SUPABASE_SERVICE_ROLE_KEY'));
+    expect(privacyPolicyTextEn, contains('Google Sheets may retain revision history'));
     expect(privacyPolicyTextEn,
         contains('Cloud health-data sync is currently disabled in the app'));
     expect(privacyPolicyTextEn, contains('HEALTH_DATA_SYNC_ENABLED=true'));

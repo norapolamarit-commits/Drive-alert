@@ -708,7 +708,7 @@ class DozState extends ChangeNotifier {
   double? longitude;
   int? deviceBattery;
   DateTime? privacyPolicyAcceptedAt;
-  String privacyPolicyVersion = 'DRAFT-1.1';
+  String privacyPolicyVersion = 'DRAFT-1.2'; // EN: Require acknowledgement of the revised storage and deletion notice. TH: ให้รับทราบประกาศฉบับปรับปรุงเรื่องการเก็บและลบข้อมูล
 
   String userName = '';
   String emergencyContactName = '';
