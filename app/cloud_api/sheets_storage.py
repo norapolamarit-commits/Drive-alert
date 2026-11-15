@@ -89,6 +89,11 @@ class SheetsStore:
             raise SheetsStorageError("Sheets row limit exceeded")
         return rows
 
+    def check_ready(self) -> None:
+        """Confirm both tabs and headers are readable with current credentials."""
+        for collection in ("sensor_events", "alert_events"):
+            self._rows(collection)
+
     def append(self, collection: str, event: dict[str, Any]) -> None:
         rows = self._rows(collection)
         if len(rows) >= MAX_ROWS + 1:

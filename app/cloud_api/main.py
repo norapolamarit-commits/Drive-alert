@@ -443,6 +443,15 @@ def readiness():  # EN: Check required Auth configuration without exposing secre
             status_code=503,  # EN: Signal that required configuration is unavailable. TH: แจ้งว่า config ที่จำเป็นยังใช้งานไม่ได้
             detail="Required service configuration is unavailable.",  # EN: Avoid disclosing environment-variable or secret details. TH: ไม่เปิดเผยชื่อตัวแปรหรือรายละเอียด secret
         )  # EN: Finish the controlled readiness failure. TH: จบการตอบกลับ readiness failure ที่ควบคุมแล้ว
+    # EN: Probe the selected store only when health-data sync is intentionally enabled.
+    # TH: ตรวจ storage ที่เลือกเฉพาะเมื่อผู้ดูแลเปิด sync ข้อมูลสุขภาพแล้ว
+    if os.getenv("HEALTH_DATA_SYNC_ENABLED", "false").strip().lower() in {"1", "true", "yes"}:
+        _require_health_data_sync_enabled()
+        if _SHEETS_STORE:
+            try:
+                _SHEETS_STORE.check_ready()
+            except SheetsStorageError as exc:
+                raise HTTPException(status_code=503, detail="Persistent health-data storage is unavailable.") from exc
     return {"status": "ready"}  # EN: Confirm required Auth configuration is present. TH: ยืนยันว่ามี config Auth ที่จำเป็น
 
 

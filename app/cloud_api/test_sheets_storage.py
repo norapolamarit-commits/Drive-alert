@@ -62,6 +62,18 @@ class SheetsStoreTests(unittest.TestCase):
         with self.assertRaises(SheetsStorageError):
             self.store.read("sensor_events", "alice", 10)
 
+    def test_readiness_checks_both_sheets_tabs_when_sync_is_enabled(self):
+        with patch.object(main, "_SHEETS_STORE", self.store):
+            with patch.dict("os.environ", {
+                "SUPABASE_URL": "https://example.supabase.co",
+                "SUPABASE_PUBLISHABLE_KEY": "public-test-key",
+                "HEALTH_DATA_SYNC_ENABLED": "true",
+            }):
+                client = TestClient(main.app)
+                self.assertEqual(client.get("/ready").status_code, 200)
+                self.session.rows["AlertEvents"] = [["wrong"]]
+                self.assertEqual(client.get("/ready").status_code, 503)
+
     def test_api_fails_closed_when_sheets_write_fails(self):
         class FailingStore:
             def append(self, collection, event):
