@@ -7,6 +7,19 @@ import preflight_chat
 
 
 class PreflightChatTests(unittest.TestCase):
+    def test_preflight_stops_when_auth_is_not_ready(self):
+        # EN: A live process without Auth must not pass the deploy preflight.
+        # TH: process ที่ยังทำงานแต่ไม่มี Auth ต้องไม่ผ่านการตรวจก่อน deploy
+        with patch.dict(
+            os.environ,
+            {"DOZ_API_BASE_URL": "https://api.example.org", "DOZ_CHAT_TEST_TOKEN": "test-token"},
+            clear=True,
+        ), patch("preflight_chat.request_json", return_value=(503, None)) as request_json:
+            with patch("sys.argv", ["preflight_chat.py"]):
+                self.assertEqual(preflight_chat.main(), 1)
+        self.assertEqual(request_json.call_count, 1)
+        self.assertEqual(request_json.call_args.args[0], "https://api.example.org/ready")
+
     def test_redirect_handler_never_forwards_authorization(self):
         handler = preflight_chat._RejectRedirects()
         self.assertIsNone(
@@ -47,6 +60,7 @@ class PreflightChatTests(unittest.TestCase):
             "https://user:pass@api.example.org",
             "https://api.example.org/chat",
             "https://api.example.org/health",
+            "https://api.example.org/ready",
             "https://api.example.org?debug=1",
         ):
             with self.subTest(url=url), self.assertRaises(ValueError):
@@ -61,9 +75,9 @@ class PreflightChatTests(unittest.TestCase):
         clear=True,
     )
     @patch("preflight_chat.request_json")
-    def test_preflight_checks_health_chat_advice_and_invalid_tokens(self, request_json):
+    def test_preflight_checks_readiness_chat_advice_and_invalid_tokens(self, request_json):
         request_json.side_effect = [
-            (200, {"status": "ok"}),
+            (200, {"status": "ready"}),
             (200, {"mode": "llm", "answer": "READY"}),
             (200, {"mode": "rag", "advice": "Take a safe break."}),
             (401, None),
@@ -73,6 +87,7 @@ class PreflightChatTests(unittest.TestCase):
         with patch("sys.argv", ["preflight_chat.py"]):
             self.assertEqual(preflight_chat.main(), 0)
         self.assertEqual(request_json.call_count, 5)
+        self.assertEqual(request_json.call_args_list[0].args[0], "https://api.example.org/ready")
         self.assertEqual(
             request_json.call_args_list[1].kwargs["token"],
             "test-token-not-for-real-use",
@@ -102,7 +117,7 @@ class PreflightChatTests(unittest.TestCase):
     @patch("preflight_chat.request_json")
     def test_require_llm_rejects_explicit_fallback_mode(self, request_json):
         request_json.side_effect = [
-            (200, {"status": "ok"}),
+            (200, {"status": "ready"}),
             (200, {"mode": "fallback", "answer": "Local response"}),
         ]
 
@@ -121,7 +136,7 @@ class PreflightChatTests(unittest.TestCase):
     @patch("preflight_chat.request_json")
     def test_require_llm_rejects_advice_fallback_mode(self, request_json):
         request_json.side_effect = [
-            (200, {"status": "ok"}),
+            (200, {"status": "ready"}),
             (200, {"mode": "llm", "answer": "READY"}),
             (200, {"mode": "fallback", "advice": "Generic advice."}),
         ]

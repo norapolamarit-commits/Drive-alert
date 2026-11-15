@@ -18,6 +18,9 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      # EN: Restrict browser calls to the dedicated web app origin. TH: จำกัดคำขอจาก browser ให้มาจากเว็บแอปเท่านั้น
+      - key: DOZ_WEB_ORIGIN
+        value: "https://doz-web.onrender.com"
       - key: HEALTH_DATA_SYNC_ENABLED
         value: "false"
       # HuggingFace access token (router) สำหรับเรียก Pathumma LLM — ตั้งค่าใน Render dashboard

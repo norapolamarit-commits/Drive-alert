@@ -12,6 +12,34 @@ import main
 
 
 class SupabaseChatAuthTests(unittest.TestCase):
+    def test_web_cors_allows_only_the_configured_origin(self):
+        # EN: The Flutter site must pass a bearer/JSON preflight without opening every origin.
+        # TH: เว็บ Flutter ต้องผ่าน preflight สำหรับ bearer/JSON โดยไม่เปิดให้ทุก origin
+        with TestClient(main.app) as client:
+            approved = client.options(
+                "/chat",
+                headers={
+                    "Origin": "https://doz-web.onrender.com",
+                    "Access-Control-Request-Method": "POST",
+                    "Access-Control-Request-Headers": "authorization,content-type",
+                },
+            )
+            rejected = client.options(
+                "/chat",
+                headers={
+                    "Origin": "https://untrusted.example.org",
+                    "Access-Control-Request-Method": "POST",
+                    "Access-Control-Request-Headers": "authorization,content-type",
+                },
+            )
+        self.assertEqual(approved.status_code, 200)
+        self.assertEqual(
+            approved.headers.get("access-control-allow-origin"),
+            "https://doz-web.onrender.com",
+        )
+        self.assertEqual(rejected.status_code, 400)
+        self.assertNotIn("access-control-allow-origin", rejected.headers)
+
     def setUp(self):
         main.SENSOR_EVENTS.clear()
         main.ALERT_EVENTS.clear()

@@ -15,6 +15,7 @@ from uuid import uuid4  # EN: Generate opaque request correlation IDs. TH: ส�
 
 import httpx  # EN: Send bounded asynchronous requests to configured providers. TH: ส่งคำขอ async ที่จำกัดขนาดไปยัง provider ที่ตั้งไว้
 from fastapi import FastAPI, Header, HTTPException, Query, Request  # EN: Define API routes, validated headers, errors, and request access. TH: กำหนด route, header, error และการเข้าถึง request
+from fastapi.middleware.cors import CORSMiddleware  # EN: Allow only the configured Flutter web origin to call this API. TH: อนุญาตเฉพาะ origin เว็บ Flutter ที่กำหนดให้เรียก API
 from fastapi.responses import HTMLResponse  # EN: Return escaped local dashboard markup. TH: ส่ง markup dashboard ภายในที่ escape แล้ว
 from pydantic import BaseModel, ConfigDict, Field  # EN: Validate API request schemas and field constraints. TH: ตรวจ schema request API และข้อจำกัด field
 
@@ -235,6 +236,30 @@ class RequestBodyLimitMiddleware:  # EN: Enforce per-route request byte limits b
 
 
 app.add_middleware(RequestBodyLimitMiddleware)  # EN: Install byte-level limits before route body parsing. TH: ติดตั้งการจำกัด byte ก่อน route parse body
+
+# EN: The default matches the dedicated Render static-site blueprint; a custom domain can override it.
+# TH: ค่าเริ่มต้นตรงกับ static site บน Render และเปลี่ยนได้เมื่อใช้โดเมนเฉพาะ
+_web_origin = os.getenv("DOZ_WEB_ORIGIN", "https://doz-web.onrender.com").strip()
+_web_origin_parts = urlsplit(_web_origin)
+if (
+    _web_origin_parts.scheme != "https"
+    or not _web_origin_parts.hostname
+    or _web_origin_parts.username is not None
+    or _web_origin_parts.password is not None
+    or _web_origin_parts.path.rstrip("/")
+    or _web_origin_parts.query
+    or _web_origin_parts.fragment
+):
+    raise ValueError("DOZ_WEB_ORIGIN must be a bare HTTPS origin.")
+_web_origin = _web_origin.rstrip("/")
+app.add_middleware(  # EN: Wrap the API with an exact-origin CORS policy. TH: ครอบ API ด้วยนโยบาย CORS ที่กำหนด origin ตรงตัว
+    CORSMiddleware,
+    allow_origins=[_web_origin],  # EN: Never wildcard authenticated health requests. TH: ไม่ใช้ wildcard กับคำขอสุขภาพที่มี Auth
+    allow_methods=["GET", "POST", "DELETE"],  # EN: Match the browser-facing API verbs. TH: จำกัด method ตามที่หน้าเว็บใช้
+    allow_headers=["Authorization", "Content-Type"],  # EN: Permit bearer Auth and JSON only. TH: อนุญาต bearer Auth และ JSON
+    expose_headers=["X-Request-ID"],  # EN: Let the browser report opaque correlation IDs. TH: ให้เว็บอ่านรหัสอ้างอิงคำขอแบบสุ่มได้
+    max_age=600,  # EN: Cache a successful preflight for ten minutes. TH: cache ผล preflight ที่ผ่านไว้สิบนาที
+)
 
 
 def _append_bounded_event(events: list[dict[str, Any]], event: dict[str, Any]) -> None:  # EN: Append one event while keeping the list under its memory cap. TH: เพิ่ม event หนึ่งรายการโดยคงจำนวนใน RAM ไม่เกินเพดาน

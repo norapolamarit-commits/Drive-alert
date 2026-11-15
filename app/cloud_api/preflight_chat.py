@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check a deployed doz API without sending sensor or profile data."""
+"""Check a deployed doz API without sending sensor or profile data. / ตรวจ API โดยไม่ส่งข้อมูลเซนเซอร์หรือโปรไฟล์"""
 
 import argparse
 import json
@@ -20,7 +20,7 @@ _OPENER = build_opener(_RejectRedirects())  # EN: Reuse a non-redirecting opener
 
 
 def parse_base_url(value: str) -> str:
-    """Accept only an HTTPS API origin/prefix, never credentials or route URLs."""
+    """EN: Accept only a clean HTTPS API base. TH: รับเฉพาะ URL ตั้งต้น HTTPS ที่สะอาด"""
     parts = urlsplit(value.strip())
     if (
         parts.scheme != "https"
@@ -29,7 +29,7 @@ def parse_base_url(value: str) -> str:
         or parts.password is not None
         or parts.query
         or parts.fragment
-        or parts.path.rstrip("/").endswith(("/chat", "/health"))
+        or parts.path.rstrip("/").endswith(("/chat", "/health", "/ready"))
     ):
         raise ValueError("DOZ_API_BASE_URL must be a clean HTTPS API base URL.")
     return urlunsplit((parts.scheme, parts.netloc, parts.path.rstrip("/"), "", ""))
@@ -61,6 +61,7 @@ def request_json(
 
 
 def main() -> int:
+    """EN: Check readiness, authenticated routes, and invalid-token rejection. TH: ตรวจความพร้อม route ที่ยืนยันตัวตนและการปฏิเสธ token ผิด"""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--require-llm",
@@ -79,11 +80,13 @@ def main() -> int:
         return 2
 
     try:
-        health_status, health = request_json(f"{base_url}/health")
-        if health_status != 200 or not isinstance(health, dict) or health.get("status") != "ok":
-            print(f"Health check failed: HTTP {health_status}.", file=sys.stderr)
+        # EN: Readiness requires Auth configuration, unlike process liveness at /health.
+        # TH: /ready ต้องตั้งค่า Auth ครบ ต่างจาก /health ที่ตรวจแค่ว่า process ยังทำงาน
+        ready_status, ready = request_json(f"{base_url}/ready")
+        if ready_status != 200 or not isinstance(ready, dict) or ready.get("status") != "ready":
+            print(f"Readiness check failed: HTTP {ready_status}.", file=sys.stderr)
             return 1
-        print("Health check: HTTP 200; status=ok.")
+        print("Readiness check: HTTP 200; status=ready.")
 
         chat_status, chat = request_json(
             f"{base_url}/chat",
