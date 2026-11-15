@@ -279,23 +279,23 @@ AI_RATE_LIMIT_WINDOW_SECONDS = _bounded_env_int(
 AI_MAX_CONCURRENT_REQUESTS = _bounded_env_int(
     "AI_MAX_CONCURRENT_REQUESTS", 2, 1, 64
 )
-_AI_REQUEST_TIMES: OrderedDict[str, deque[float]] = OrderedDict()
-_AI_RATE_LIMIT_LOCK = Lock()
-_AI_IN_FLIGHT = BoundedSemaphore(AI_MAX_CONCURRENT_REQUESTS)
+_AI_REQUEST_TIMES: OrderedDict[str, deque[float]] = OrderedDict()  # EN: Track bounded request times by account. TH: เก็บเวลาคำขอต่อบัญชีแบบจำกัดขนาด
+_AI_RATE_LIMIT_LOCK = Lock()  # EN: Serialize rate-limit updates. TH: ล็อกการปรับข้อมูลจำกัดคำขอ
+_AI_IN_FLIGHT = BoundedSemaphore(AI_MAX_CONCURRENT_REQUESTS)  # EN: Cap concurrent AI calls. TH: จำกัดจำนวนงาน AI พร้อมกัน
 
-SENSOR_EVENTS: list[dict[str, Any]] = []
-ALERT_EVENTS: list[dict[str, Any]] = []
-FIRESTORE_COLLECTION_PREFIX = os.getenv("FIRESTORE_COLLECTION_PREFIX", "vita_guard")
-USE_FIRESTORE = os.getenv("USE_FIRESTORE", "").lower() in {"1", "true", "yes"}
-_FIRESTORE_CLIENT = firestore.Client() if USE_FIRESTORE and firestore else None
+SENSOR_EVENTS: list[dict[str, Any]] = []  # EN: Hold explicitly enabled ephemeral sensor events. TH: เก็บเหตุการณ์เซนเซอร์ชั่วคราวเมื่อเปิดใช้ชัดเจน
+ALERT_EVENTS: list[dict[str, Any]] = []  # EN: Hold explicitly enabled ephemeral alerts. TH: เก็บการแจ้งเตือนชั่วคราวเมื่อเปิดใช้ชัดเจน
+FIRESTORE_COLLECTION_PREFIX = os.getenv("FIRESTORE_COLLECTION_PREFIX", "vita_guard")  # EN: Namespace Firestore collections. TH: กำหนดคำนำหน้าชุดข้อมูล Firestore
+USE_FIRESTORE = os.getenv("USE_FIRESTORE", "").lower() in {"1", "true", "yes"}  # EN: Opt in to Firestore explicitly. TH: เปิด Firestore เฉพาะเมื่อระบุชัดเจน
+_FIRESTORE_CLIENT = firestore.Client() if USE_FIRESTORE and firestore else None  # EN: Create Firestore only if selected and installed. TH: สร้าง Firestore เมื่อเลือกและมีไลบรารี
 try:  # EN: Keep the API online while a partial Sheets setup is being completed. TH: ให้ API ยังทำงานระหว่างตั้งค่า Sheets ที่ยังไม่ครบ
     _SHEETS_STORE = store_from_env()  # EN: Initialize Sheets only with complete credentials. TH: เริ่ม Sheets เมื่อข้อมูลรับรองครบเท่านั้น
     _SHEETS_CONFIG_ERROR = False  # EN: Record that the optional store is configured consistently. TH: บันทึกว่าการตั้งค่า storage ไม่ขัดแย้ง
 except SheetsStorageError:  # EN: Do not expose credentials or crash during configuration. TH: ไม่เปิดเผยข้อมูลรับรองหรือทำให้เซิร์ฟเวอร์ล้มระหว่างตั้งค่า
     _SHEETS_STORE = None  # EN: Disable storage until its configuration is valid. TH: ปิด storage จนกว่าการตั้งค่าจะถูกต้อง
     _SHEETS_CONFIG_ERROR = True  # EN: Block readiness and health routes if sync is enabled. TH: ปิด readiness และเส้นทางข้อมูลสุขภาพหากเปิด sync
-if _SHEETS_STORE and _FIRESTORE_CLIENT:
-    raise RuntimeError("Choose exactly one persistent health-data backend")
+if _SHEETS_STORE and _FIRESTORE_CLIENT:  # EN: Refuse ambiguous dual-write storage. TH: ปฏิเสธการตั้งค่า storage ถาวรสองแห่งพร้อมกัน
+    raise RuntimeError("Choose exactly one persistent health-data backend")  # EN: Stop rather than split private records. TH: หยุดแทนการแยกข้อมูลส่วนตัวไปสองที่
 
 
 class CloudPayload(BaseModel):  # EN: Model a bounded cloud event while preserving supported extra fields. TH: แทน cloud event ที่จำกัดขนาดและคง field เพิ่มเติมที่รองรับ
@@ -433,13 +433,13 @@ def _enforce_ai_rate_limit(user_id: str, *, now: Optional[float] = None) -> None
         _AI_REQUEST_TIMES.move_to_end(user_id)  # EN: Keep recently used account state at the end for bounded cleanup. TH: ย้ายบัญชีที่ใช้งานล่าสุดไว้ท้ายเพื่อช่วย cleanup แบบจำกัด
 
 
-@app.get("/health")
+@app.get("/health")  # EN: Expose a process liveness probe. TH: เปิดเส้นทางตรวจว่าโปรเซสทำงาน
 def health():  # EN: Report process liveness independently of optional service configuration. TH: รายงานว่า process ยังตอบสนองโดยไม่ผูกกับ config ของ service เสริม
     # EN: Keep the public liveness endpoint free of personal and storage details. TH: ไม่เปิดเผยข้อมูลส่วนบุคคลหรือรายละเอียด storage ใน health check สาธารณะ
     return {"status": "ok"}  # EN: Return only a minimal alive status. TH: คืนเฉพาะสถานะว่า service ตอบสนอง
 
 
-@app.get("/ready")
+@app.get("/ready")  # EN: Expose dependency readiness without secrets. TH: เปิดเส้นทางตรวจความพร้อมโดยไม่เปิดเผยคีย์
 def readiness():  # EN: Check required Auth configuration without exposing secret values. TH: ตรวจ config Auth ที่จำเป็นโดยไม่เปิดเผยค่า secret
     supabase_url = _validated_supabase_base_url(os.getenv("SUPABASE_URL"))  # EN: Require a validated HTTPS Auth origin. TH: บังคับใช้ Auth origin HTTPS ที่ผ่านการตรวจ
     supabase_key = os.getenv("SUPABASE_PUBLISHABLE_KEY") or os.getenv("SUPABASE_ANON_KEY", "")  # EN: Accept the configured public project key names. TH: รองรับชื่อ public project key ที่ระบบกำหนด
@@ -450,13 +450,13 @@ def readiness():  # EN: Check required Auth configuration without exposing secre
         )  # EN: Finish the controlled readiness failure. TH: จบการตอบกลับ readiness failure ที่ควบคุมแล้ว
     # EN: Probe the selected store only when health-data sync is intentionally enabled.
     # TH: ตรวจ storage ที่เลือกเฉพาะเมื่อผู้ดูแลเปิด sync ข้อมูลสุขภาพแล้ว
-    if os.getenv("HEALTH_DATA_SYNC_ENABLED", "false").strip().lower() in {"1", "true", "yes"}:
-        _require_health_data_sync_enabled()
-        if _SHEETS_STORE:
-            try:
-                _SHEETS_STORE.check_ready()
-            except SheetsStorageError as exc:
-                raise HTTPException(status_code=503, detail="Persistent health-data storage is unavailable.") from exc
+    if os.getenv("HEALTH_DATA_SYNC_ENABLED", "false").strip().lower() in {"1", "true", "yes"}:  # EN: Probe storage only if sync is on. TH: ตรวจ storage เมื่อเปิด sync เท่านั้น
+        _require_health_data_sync_enabled()  # EN: Confirm a usable backend exists. TH: ยืนยันว่ามี backend ที่ใช้ได้
+        if _SHEETS_STORE:  # EN: Probe the selected Sheets adapter. TH: ตรวจตัวเชื่อม Sheets ที่เลือก
+            try:  # EN: Convert provider failure into HTTP readiness failure. TH: แปลงข้อผิดพลาดผู้ให้บริการเป็นสถานะไม่พร้อม
+                _SHEETS_STORE.check_ready()  # EN: Check both required tabs. TH: ตรวจแท็บที่จำเป็นทั้งสอง
+            except SheetsStorageError as exc:  # EN: Catch failed Sheets probes. TH: จับข้อผิดพลาดการตรวจ Sheets
+                raise HTTPException(status_code=503, detail="Persistent health-data storage is unavailable.") from exc  # EN: Fail closed without leaking details. TH: แจ้งไม่พร้อมโดยไม่เปิดเผยรายละเอียด
     return {"status": "ready"}  # EN: Confirm required Auth configuration is present. TH: ยืนยันว่ามี config Auth ที่จำเป็น
 
 
