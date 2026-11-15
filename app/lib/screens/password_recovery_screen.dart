@@ -6,6 +6,8 @@ import '../services/auth_service.dart';
 import '../ui_text.dart';
 
 class PasswordRecoveryScreen extends StatefulWidget {
+  // EN: Show this page only after the Auth recovery route is received.
+  // TH: แสดงหน้านี้หลังได้รับเส้นทางกู้คืนจากระบบ Auth
   const PasswordRecoveryScreen({super.key});
 
   @override
@@ -13,6 +15,8 @@ class PasswordRecoveryScreen extends StatefulWidget {
 }
 
 class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
+  // EN: Keep new credentials in memory only until submission or disposal.
+  // TH: เก็บรหัสผ่านใหม่ในหน่วยความจำจนกว่าจะส่งหรือปิดหน้า
   final _password = TextEditingController();
   final _confirmation = TextEditingController();
   bool _busy = false;
@@ -22,6 +26,8 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
 
   @override
   void dispose() {
+    // EN: Release both password controllers when this screen is removed.
+    // TH: คืน controller ของรหัสผ่านทั้งสองช่องเมื่อออกจากหน้านี้
     _password.dispose();
     _confirmation.dispose();
     super.dispose();
@@ -84,6 +90,8 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
       );
 
   Future<void> _save() async {
+    // EN: Check matching passwords locally before invoking the Auth service.
+    // TH: ตรวจว่ารหัสผ่านตรงกันในเครื่องก่อนเรียกบริการ Auth
     final password = _password.text;
     if (password.length < 8 || password != _confirmation.text) {
       setState(() => _error = _copy(
@@ -98,6 +106,8 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
     try {
       final state = context.read<DozState>();
       await AuthService.updatePassword(password);
+      // EN: Do not touch the widget tree after an asynchronous completion if unmounted.
+      // TH: ไม่ใช้งาน widget tree หลังงาน async หากหน้าถูกปิดไปแล้ว
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

@@ -10,6 +10,8 @@ import '../services/auth_service.dart';
 import '../ui_text.dart';
 
 class LoginScreen extends StatefulWidget {
+  // EN: Keep authentication in one screen so sign-in and sign-up share validation.
+  // TH: รวมหน้าลงชื่อเข้าใช้และสมัครบัญชีเพื่อใช้การตรวจข้อมูลชุดเดียวกัน
   const LoginScreen({super.key, this.onCreateAccount});
 
   /// Optional seam for exercising the email-confirmation flow without a
@@ -22,6 +24,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  // EN: Form state and controllers own only input typed on this screen.
+  // TH: form และ controller เก็บเฉพาะข้อมูลที่พิมพ์บนหน้านี้
   final _formKey = GlobalKey<FormState>();
   final _email = TextEditingController();
   final _password = TextEditingController();
@@ -36,6 +40,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    // EN: Release password-bearing controllers when the page closes.
+    // TH: คืนหน่วยความจำของ controller ที่เก็บรหัสผ่านเมื่อปิดหน้า
     _email.dispose();
     _password.dispose();
     _confirmPassword.dispose();
@@ -266,6 +272,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _submit() async {
+    // EN: Reject malformed input before starting any network Auth request.
+    // TH: ปฏิเสธข้อมูลไม่ถูกต้องก่อนส่งคำขอ Auth ผ่านเครือข่าย
     if (!_formKey.currentState!.validate()) return;
     setState(() {
       _busy = true;
@@ -281,6 +289,8 @@ class _LoginScreenState extends State<LoginScreen> {
         );
         if (!mounted) return;
         if (userId == null) {
+          // EN: Email confirmation is pending; never bind an unverified user.
+          // TH: ยังรอยืนยันอีเมล จึงไม่ผูกบัญชีที่ยังไม่ผ่านการยืนยัน
           TextInput.finishAutofillContext(shouldSave: false);
           setState(() {
             _creatingAccount = false;
@@ -316,6 +326,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _enterAccount(String userId) async {
+    // EN: Persist the authenticated account identity in local app state.
+    // TH: บันทึกตัวตนบัญชีที่ยืนยันแล้วในสถานะแอปภายในเครื่อง
     TextInput.finishAutofillContext(shouldSave: true);
     await context.read<DozState>().bindAuthenticatedUser(userId);
   }
@@ -331,6 +343,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _resetPassword() async {
+    // EN: Require a plausible address before asking the Auth provider to email it.
+    // TH: ตรวจรูปแบบอีเมลก่อนให้ผู้ให้บริการ Auth ส่งลิงก์กู้คืน
     final email = _email.text.trim();
     if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
       setState(() {
