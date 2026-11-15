@@ -1696,6 +1696,9 @@ class DozState extends ChangeNotifier {
     final last = lastSensorUpdateAt;
     if (last == null) return 'No sensor data yet';
     final age = DateTime.now().difference(last);
+    // EN: A future receive time cannot prove a fresh physical packet.
+    // TH: เวลารับที่อยู่อนาคตใช้ยืนยันว่า packet จริงยังใหม่ไม่ได้
+    if (age.isNegative) return 'Sensor timestamp invalid';
     if (age.inSeconds <= 8) return 'Receiving data';
     if (age.inSeconds <= 30) return 'Sensor data delayed';
     return 'Sensor data stale';

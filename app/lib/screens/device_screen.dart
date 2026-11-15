@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 import '../main.dart';
 import '../ui_text.dart';
 
+// EN: Connect to BLE and distinguish transport, packet arrival, and AI availability.
+// TH: เชื่อม BLE และแยกสถานะการเชื่อม การรับ packet และผล AI ออกจากกัน
 class DeviceScreen extends StatelessWidget {
   const DeviceScreen({super.key});
 
@@ -171,6 +173,8 @@ class DeviceScreen extends StatelessWidget {
       status.toLowerCase().contains('location services');
 }
 
+// EN: Display received optical and motion telemetry without treating it as inference.
+// TH: แสดงค่าแสงและการเคลื่อนไหวที่รับได้โดยไม่เรียกว่าเป็นผลทำนาย
 class _LiveTelemetryCard extends StatelessWidget {
   const _LiveTelemetryCard({required this.state});
 
@@ -179,11 +183,20 @@ class _LiveTelemetryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final raw = state.currentSensor;
+    // EN: A connected link and non-null ADC fields do not prove device origin.
+    // TH: เชื่อมต่อแล้วและมีค่า ADC ไม่เพียงพอที่จะยืนยันว่ามาจากอุปกรณ์
     final hasRaw = raw.rawRed != null && raw.rawIr != null;
-    final isLive = state.bleConnected && hasRaw;
-    final age = state.lastSensorUpdateAt == null
-        ? null
-        : DateTime.now().difference(state.lastSensorUpdateAt!).inSeconds;
+    final hasDevicePacket =
+        state.bleConnected && state.lastReadingWasFromDevice && hasRaw;
+    // EN: Use full duration precision to reject future and stale receive times.
+    // TH: ใช้เวลาแบบละเอียดเพื่อปฏิเสธเวลาที่อยู่อนาคตหรือเก่าเกิน
+    final observedAt = state.lastSensorUpdateAt;
+    final age =
+        observedAt == null ? null : DateTime.now().difference(observedAt);
+    final fresh = hasDevicePacket &&
+        age != null &&
+        !age.isNegative &&
+        age <= const Duration(seconds: 8);
     String copy(String en, String th) => uiText(context, english: en, thai: th);
 
     return Container(
@@ -208,8 +221,8 @@ class _LiveTelemetryCard extends StatelessWidget {
                         )),
               ),
               _LiveDot(
-                active: isLive && age != null && age <= 8,
-                semanticLabel: isLive && age != null && age <= 8
+                active: fresh,
+                semanticLabel: fresh
                     ? copy('Fresh sensor data', 'ข้อมูลเซนเซอร์เป็นปัจจุบัน')
                     : copy('No fresh sensor data', 'ไม่มีข้อมูลเซนเซอร์ล่าสุด'),
               ),
@@ -220,17 +233,26 @@ class _LiveTelemetryCard extends StatelessWidget {
             !state.bleConnected
                 ? copy('Connect a device to verify incoming data.',
                     'เชื่อมต่ออุปกรณ์เพื่อทดสอบการรับข้อมูล')
-                : !hasRaw
+                : !hasDevicePacket
                     ? copy('Connected — waiting for the first sensor packet.',
                         'เชื่อมต่อแล้ว — กำลังรอข้อมูลเซนเซอร์ชุดแรก')
-                    : age != null && age > 8
-                        ? copy('No recent packet • last update $age s ago',
-                            'ไม่ได้รับข้อมูลล่าสุด • อัปเดตล่าสุด $age วินาทีก่อน')
-                        : copy('Receiving live raw telemetry',
-                            'กำลังรับข้อมูลดิบจากอุปกรณ์'),
+                    : fresh
+                        ? copy('Receiving live raw telemetry',
+                            'กำลังรับข้อมูลดิบจากอุปกรณ์')
+                        : age == null || age.isNegative
+                            ? copy(
+                                'Packet time unavailable; freshness cannot be verified.',
+                                'ตรวจสอบเวลาของข้อมูลไม่ได้ จึงยืนยันความใหม่ของข้อมูลไม่ได้',
+                              )
+                            : copy(
+                                'No recent packet • last update ${age.inSeconds} s ago',
+                                'ไม่ได้รับข้อมูลล่าสุด • อัปเดตล่าสุด ${age.inSeconds} วินาทีก่อน',
+                              ),
             style: const TextStyle(color: Color(0xFFA7B0C0), fontSize: 13),
           ),
-          if (isLive) ...[
+          // EN: Keep the last received values visible, but label stale data above.
+          // TH: คงค่าที่เคยรับไว้ แต่ระบุข้างบนเมื่อข้อมูลเก่า
+          if (hasDevicePacket) ...[
             const SizedBox(height: 10),
             Container(
               width: double.infinity,
@@ -292,6 +314,8 @@ class _LiveTelemetryCard extends StatelessWidget {
   }
 }
 
+// EN: Pair one physical measurement with its unit.
+// TH: แสดงค่าที่วัดจริงหนึ่งรายการพร้อมหน่วย
 class _ReadingChip extends StatelessWidget {
   const _ReadingChip({required this.label, required this.value});
 
@@ -318,6 +342,8 @@ class _ReadingChip extends StatelessWidget {
       );
 }
 
+// EN: Expose packet freshness to both sighted and screen-reader users.
+// TH: แสดงความใหม่ของ packet ทั้งแบบจุดสีและคำอ่านหน้าจอ
 class _LiveDot extends StatelessWidget {
   const _LiveDot({required this.active, required this.semanticLabel});
 
@@ -341,6 +367,8 @@ class _LiveDot extends StatelessWidget {
       );
 }
 
+// EN: List one discovered BLE advertiser and start connection on tap.
+// TH: แสดงอุปกรณ์ BLE ที่พบหนึ่งรายการและเริ่มเชื่อมเมื่อกด
 class _DeviceTile extends StatelessWidget {
   const _DeviceTile(
       {required this.result, required this.busy, required this.connected});
@@ -389,6 +417,8 @@ class _DeviceTile extends StatelessWidget {
   }
 }
 
+// EN: Present setup or firmware limitations alongside controls.
+// TH: แสดงคำแนะนำการตั้งค่าหรือข้อจำกัดเฟิร์มแวร์ข้างปุ่มควบคุม
 class _HintCard extends StatelessWidget {
   const _HintCard({required this.icon, required this.text});
   final IconData icon;

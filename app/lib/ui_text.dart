@@ -148,6 +148,7 @@ String localizedBleStatus(BuildContext context, String status) {
     'Receiving data': 'กำลังรับข้อมูล',
     'Sensor data delayed': 'ข้อมูลจากเซนเซอร์ล่าช้า',
     'Sensor data stale': 'ไม่มีข้อมูลเซนเซอร์ใหม่',
+    'Sensor timestamp invalid': 'เวลาเซนเซอร์ผิดปกติ',
     'Connected; waiting for first sensor packet':
         'เชื่อมต่อแล้ว กำลังรอข้อมูลจากเซนเซอร์ชุดแรก',
     'Mock BLE stream': 'ใช้ข้อมูลสาธิตจากแอป',

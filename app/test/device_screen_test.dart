@@ -121,6 +121,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final state = DozState()
       ..bleConnected = true
+      ..lastReadingWasFromDevice = true
       ..bleDeviceName = 'Doz prototype'
       ..lastSensorUpdateAt = DateTime.now()
       ..currentSensor = SensorData(
@@ -175,6 +176,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     final state = DozState()
       ..bleConnected = true
+      ..lastReadingWasFromDevice = true
       ..bleDeviceName = 'Doz prototype'
       ..lastSensorUpdateAt = DateTime.now()
       ..currentSensor = SensorData(
@@ -215,6 +217,15 @@ void main() {
     expect(
         find.textContaining('does not send an AI prediction'), findsOneWidget);
 
+    // EN: A raw-looking value without device provenance cannot be called live.
+    // TH: ค่าที่ดูเหมือนข้อมูลดิบแต่ไม่มีที่มาจากอุปกรณ์ห้ามแสดงว่าเป็นข้อมูลสด
+    state.lastReadingWasFromDevice = false;
+    state.notifyListeners();
+    await tester.pump();
+    expect(find.textContaining('waiting for the first sensor packet'),
+        findsOneWidget);
+    expect(find.text('Red (ADC)'), findsNothing);
+
     await tester.pumpWidget(const SizedBox.shrink());
     state.dispose();
     tester.view.resetPhysicalSize();
@@ -227,6 +238,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     final state = DozState()
       ..bleConnected = true
+      ..lastReadingWasFromDevice = true
       ..bleDeviceName = 'Doz prototype'
       ..lastSensorUpdateAt = DateTime.now()
       ..currentSensor = SensorData(
@@ -262,6 +274,14 @@ void main() {
     expect(find.textContaining('No recent packet'), findsOneWidget);
     expect(find.textContaining('Receiving live raw telemetry'), findsNothing);
 
+    // EN: A future receive time must not restore the fresh-data indicator.
+    // TH: เวลารับที่อยู่อนาคตต้องไม่ทำให้สถานะกลับเป็นข้อมูลสด
+    state.lastSensorUpdateAt = DateTime.now().add(const Duration(minutes: 1));
+    state.refreshSensorFreshness();
+    await tester.pump();
+    expect(find.textContaining('freshness cannot be verified'), findsOneWidget);
+    expect(find.textContaining('Receiving live raw telemetry'), findsNothing);
+
     await tester.pumpWidget(const SizedBox.shrink());
     state.dispose();
     tester.view.resetPhysicalSize();
@@ -275,6 +295,7 @@ void main() {
     final semantics = tester.ensureSemantics();
     final state = DozState()
       ..bleConnected = true
+      ..lastReadingWasFromDevice = true
       ..lastSensorUpdateAt = DateTime.now()
       ..currentSensor = SensorData(
         heartRate: 0,
