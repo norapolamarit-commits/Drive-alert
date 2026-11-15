@@ -1,3 +1,4 @@
+import 'dart:async'; // EN: Coordinate a delayed secure-storage read in the race test. TH: ควบคุมการอ่าน secure storage ที่ล่าช้าใน test การทำงานพร้อมกัน
 import 'dart:convert';
 
 import 'package:doz/models/alert_record.dart';
@@ -101,6 +102,36 @@ void main() {
     expect(await second.loadAlerts(), isEmpty);
   });
 
+  test('invalidated account history is hidden even if local delete fails',
+      () async {
+    // EN: Keep a stored alert present to model a failed local delete. TH: คง alert ไว้เพื่อจำลองการลบในเครื่องที่ล้มเหลว
+    final secureStore = InMemorySecureKeyValueStore();
+    final service = AlertStorageService(secureStore: secureStore)
+      ..setScope('deleted-account');
+    await service.saveAlerts([_alert(1)]);
+    expect(await service.loadAlerts(), hasLength(1));
+
+    service.invalidateScope('deleted-account');
+
+    expect(await service.loadAlerts(), isEmpty);
+  });
+
+  test('deletion during an in-flight read does not reveal old history',
+      () async {
+    // EN: Pause the secure read so account invalidation can race it. TH: หยุดการอ่าน secure ชั่วคราวเพื่อทดสอบการลบบัญชีที่เกิดพร้อมกัน
+    final secureStore = _DelayedReadSecureStorage();
+    final service = AlertStorageService(secureStore: secureStore)
+      ..setScope('deleted-account');
+    secureStore.values['doz.deleted-account.alert_history.secure.v1'] =
+        jsonEncode([_alert(1).toJson()]);
+
+    final loading = service.loadAlerts(); // EN: Begin reading before the account is invalidated. TH: เริ่มอ่านก่อนยกเลิกบัญชี
+    service.invalidateScope('deleted-account'); // EN: Mark the account deleted while the read is pending. TH: ทำเครื่องหมายว่าบัญชีถูกลบระหว่างรออ่าน
+    secureStore.releaseRead.complete(); // EN: Release the delayed storage operation. TH: ปล่อยให้การอ่าน storage ทำต่อ
+
+    expect(await loading, isEmpty); // EN: Verify stale history never reaches app state. TH: ยืนยันว่าประวัติเก่าไม่เข้าสู่สถานะแอป
+  });
+
   test('migrates alert history and removes plaintext after verified copy',
       () async {
     SharedPreferences.setMockInitialValues({
@@ -160,5 +191,16 @@ class _FailingWriteSecureStorage extends InMemorySecureKeyValueStore {
   @override
   Future<void> write(String key, String value) async {
     throw StateError('secure write failed');
+  }
+}
+
+class _DelayedReadSecureStorage extends InMemorySecureKeyValueStore {
+  // EN: Control when the fake secure store returns saved history. TH: ควบคุมเวลาที่ secure store จำลองคืนประวัติ
+  final Completer<void> releaseRead = Completer<void>();
+
+  @override
+  Future<String?> read(String key) async {
+    await releaseRead.future;
+    return values[key];
   }
 }

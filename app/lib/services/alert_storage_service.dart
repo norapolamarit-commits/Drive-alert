@@ -1,9 +1,9 @@
-import 'dart:convert';
+import 'dart:convert'; // EN: Encode and decode bounded alert-history JSON. TH: เข้ารหัสและถอดรหัส JSON ประวัติแจ้งเตือนแบบจำกัดขนาด
 
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // EN: Read and remove legacy plaintext history during migration. TH: อ่านและลบประวัติ plaintext รุ่นเก่าระหว่างย้ายข้อมูล
 
-import '../models/alert_record.dart';
-import 'secure_local_storage.dart';
+import '../models/alert_record.dart'; // EN: Validate saved alert records before display. TH: ตรวจระเบียนแจ้งเตือนก่อนแสดงผล
+import 'secure_local_storage.dart'; // EN: Store account-scoped history in platform secure storage. TH: เก็บประวัติแยกบัญชีใน secure storage ของเครื่อง
 
 /// EN: Store alert history under validated account-scoped encrypted keys.
 /// TH: จัดเก็บประวัติแจ้งเตือนด้วย key เข้ารหัสที่แยกตามบัญชีและผ่าน validation
@@ -34,9 +34,6 @@ class AlertStorageService {
   String _scopeId =
       'local-demo'; // EN: Start in the isolated demo namespace. TH: เริ่มใน namespace demo ที่แยกไว้
 
-  String get _key =>
-      'doz.$_scopeId.alert_history.secure.v1'; // EN: Build the active encrypted history key. TH: สร้าง key ประวัติที่เข้ารหัสของ scope ปัจจุบัน
-
   /// EN: Switch future reads/writes to a validated account namespace.
   /// TH: เปลี่ยนการอ่าน/เขียนถัดไปไปยัง namespace บัญชีที่ผ่านการตรวจ
   void setScope(String scopeId) {
@@ -45,8 +42,8 @@ class AlertStorageService {
     _scopeId = validateStorageScope(scopeId);
   }
 
-  /// EN: Fence a deleted account so queued saves cannot recreate its history.
-  /// TH: กั้นบัญชีที่ลบแล้วเพื่อไม่ให้ save ที่ค้างสร้างประวัติกลับมา
+  /// EN: Fence a deleted account so queued saves cannot recreate or expose its history.
+  /// TH: กั้นบัญชีที่ลบแล้วเพื่อไม่ให้ save ที่ค้างสร้างหรือเผยประวัติกลับมา
   void invalidateScope(String scopeId) {
     // EN: Permanently block history writes for a deleted account. TH: ปิดการเขียนประวัติของบัญชีที่ลบแล้ว
     _invalidatedScopes.add(validateStorageScope(
@@ -188,7 +185,15 @@ class AlertStorageService {
 
   Future<List<AlertRecord>> loadAlerts() async {
     // EN: Read only the currently scoped encrypted record. TH: อ่านเฉพาะ record เข้ารหัสของ scope ปัจจุบัน
-    final raw = await _secureStore.read(_key);
+    final scope = _scopeId; // EN: Capture the current account before any asynchronous read. TH: จับบัญชีปัจจุบันไว้ก่อนอ่านข้อมูลแบบ async
+    if (_invalidatedScopes.contains(scope)) { // EN: Refuse history for an account already deleted remotely. TH: งดอ่านประวัติของบัญชีที่ลบจาก server แล้ว
+      return []; // EN: Do not expose a stale record if local cleanup failed. TH: ไม่แสดง record เก่าหากล้างข้อมูลในเครื่องไม่สำเร็จ
+    } // EN: Finish the account-deletion read fence. TH: จบการกั้นการอ่านหลังลบบัญชี
+    final raw = await _secureStore.read( // EN: Read the captured account's encrypted history. TH: อ่านประวัติเข้ารหัสของบัญชีที่จับไว้
+        'doz.$scope.alert_history.secure.v1'); // EN: Never switch to another account's key after awaiting. TH: ไม่เปลี่ยนไปอ่าน key ของบัญชีอื่นหลัง await
+    if (_invalidatedScopes.contains(scope)) { // EN: Catch account deletion that occurred during the read. TH: ตรวจว่าบัญชีถูกลบระหว่างรออ่านหรือไม่
+      return []; // EN: Hide stale history after a concurrent deletion. TH: ซ่อนประวัติเก่าหลังการลบที่เกิดพร้อมกัน
+    } // EN: Finish the post-read deletion check. TH: จบการตรวจการลบหลังอ่าน
     if (raw == null || raw.isEmpty) {
       // EN: Treat absent storage as an empty history. TH: ถือ storage ที่ไม่มีข้อมูลเป็นประวัติว่าง
       return []; // EN: Avoid decoding a missing value. TH: ไม่ decode ค่าที่ไม่มี
