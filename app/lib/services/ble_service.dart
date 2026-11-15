@@ -1,20 +1,20 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-import 'dart:typed_data';
+import 'dart:async'; // EN: Handle BLE streams, subscriptions, and timeouts. TH: จัดการ stream, subscription และ timeout ของ BLE
+import 'dart:convert'; // EN: Decode JSON telemetry from firmware. TH: ถอดรหัส telemetry JSON จากเฟิร์มแวร์
+import 'dart:io'; // EN: Check native platform behavior for BLE permissions. TH: ตรวจแพลตฟอร์ม native สำหรับสิทธิ์ BLE
+import 'dart:typed_data'; // EN: Read binary telemetry with typed byte buffers. TH: อ่าน telemetry ไบนารีด้วย buffer แบบกำหนดชนิด
 
 import 'package:flutter/foundation.dart'
     show
         kIsWeb; // EN: Skip native permission calls in browsers. TH: ข้ามการขอ permission แบบ native ใน browser
-import 'package:flutter/services.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/services.dart'; // EN: Call the app's platform channel. TH: เรียก platform channel ของแอป
+import 'package:flutter_blue_plus/flutter_blue_plus.dart'; // EN: Scan and connect to Bluetooth LE devices. TH: ค้นหาและเชื่อมต่ออุปกรณ์ Bluetooth LE
+import 'package:geolocator/geolocator.dart'; // EN: Check Android location service needed by older BLE scans. TH: ตรวจบริการตำแหน่งที่ Android รุ่นเก่าต้องใช้ตอนสแกน BLE
+import 'package:permission_handler/permission_handler.dart'; // EN: Request platform Bluetooth permissions. TH: ขอสิทธิ์ Bluetooth จากระบบปฏิบัติการ
 
-import '../models/risk_result.dart';
-import '../models/sensor_data.dart';
-import 'ble_frame_assembler.dart';
-import 'device_risk_mapper.dart';
+import '../models/risk_result.dart'; // EN: Represent optional risk results sent by firmware. TH: แทนผลความเสี่ยงที่เฟิร์มแวร์อาจส่งมา
+import '../models/sensor_data.dart'; // EN: Represent decoded sensor samples. TH: แทนค่าตัวอย่างเซนเซอร์ที่ถอดรหัสแล้ว
+import 'ble_frame_assembler.dart'; // EN: Reassemble telemetry split over BLE notifications. TH: ประกอบ telemetry ที่แบ่งเป็นหลาย notification
+import 'device_risk_mapper.dart'; // EN: Map supported device risk codes to app states. TH: แปลงรหัสความเสี่ยงที่อุปกรณ์รองรับเป็นสถานะแอป
 
 /// EN: One BLE reading may contain raw sensor telemetry and an optional device inference.
 /// TH: BLE reading หนึ่งชุดอาจมี telemetry ดิบ และอาจมีผล inference จากอุปกรณ์
@@ -113,34 +113,34 @@ class BleService {
   String get connectedServiceUuid => _connectedServiceUuid ?? '-';
   String get connectedCharacteristicUuid => _connectedCharacteristicUuid ?? '-';
 
-  Future<List<ScanResult>> scanForEsp32({
-    Duration timeout = const Duration(seconds: 6),
-    Future<void>? cancelSignal,
-  }) async {
+  Future<List<ScanResult>> scanForEsp32({ // EN: Start a bounded scan for the Doz device. TH: เริ่มค้นหาอุปกรณ์ Doz ภายในเวลาจำกัด
+    Duration timeout = const Duration(seconds: 6), // EN: Default to a six-second scan. TH: ใช้เวลาค้นหาเริ่มต้นหกวินาที
+    Future<void>? cancelSignal, // EN: Allow the caller to stop waiting early. TH: ให้ caller หยุดรอก่อนครบเวลาได้
+  }) async { // EN: Await plugin operations without blocking the UI. TH: รอ plugin แบบไม่บล็อกหน้าจอ
     // EN: Reject overlapping plugin scans/connections and unreasonable durations.
     // TH: ปฏิเสธ scan/connect ที่ซ้อนกันและระยะเวลาที่ไม่สมเหตุผล
-    _ensureActive();
-    if (_scanInProgress || _connectInProgress) {
-      throw StateError('A BLE scan or connection is already in progress.');
-    }
-    if (timeout <= Duration.zero || timeout > const Duration(minutes: 1)) {
-      throw ArgumentError.value(
-          timeout, 'timeout', 'Must be between 0 and 1 minute.');
-    }
-    _scanInProgress = true;
+    _ensureActive(); // EN: Reject calls after service disposal. TH: ปฏิเสธเมื่อ service ถูก dispose แล้ว
+    if (_scanInProgress || _connectInProgress) { // EN: Avoid overlapping Bluetooth plugin operations. TH: กันการทำงาน Bluetooth ซ้อนกัน
+      throw StateError('A BLE scan or connection is already in progress.'); // EN: Tell the caller to wait for the current operation. TH: แจ้ง caller ให้รอการทำงานปัจจุบัน
+    } // EN: Finish concurrency guard. TH: จบการกันงานซ้อน
+    if (timeout <= Duration.zero || timeout > const Duration(minutes: 1)) { // EN: Accept only a practical scan interval. TH: รับเฉพาะช่วงเวลาค้นหาที่สมเหตุผล
+      throw ArgumentError.value( // EN: Return the invalid duration as a typed argument error. TH: แจ้งระยะเวลาที่ผิดด้วย argument error
+          timeout, 'timeout', 'Must be between 0 and 1 minute.'); // EN: Explain the accepted interval. TH: อธิบายช่วงเวลาที่รับได้
+    } // EN: Finish timeout validation. TH: จบการตรวจ timeout
+    _scanInProgress = true; // EN: Reserve the scan slot until cleanup finishes. TH: จองสถานะ scan จนกว่าจะล้างงานเสร็จ
     try {
-      return await _performScan(timeout: timeout, cancelSignal: cancelSignal);
+      return await _performScan(timeout: timeout, cancelSignal: cancelSignal); // EN: Request permissions, scan, and filter matching devices. TH: ขอสิทธิ์ ค้นหา และกรองอุปกรณ์ที่ตรง
     } finally {
-      _scanInProgress = false;
-    }
-  }
+      _scanInProgress = false; // EN: Release the scan slot even when the plugin throws. TH: คืนสถานะ scan แม้ plugin โยน error
+    } // EN: Finish guaranteed scan cleanup. TH: จบการล้างสถานะ scan ที่รับประกัน
+  } // EN: Finish bounded device discovery. TH: จบการค้นหาอุปกรณ์แบบจำกัดเวลา
 
-  Future<List<ScanResult>> _performScan({
-    required Duration timeout,
-    Future<void>? cancelSignal,
-  }) async {
-    await _requestBlePermissions();
-    _ensureActive();
+  Future<List<ScanResult>> _performScan({ // EN: Execute one Bluetooth discovery operation. TH: ทำการค้นหา Bluetooth หนึ่งครั้ง
+    required Duration timeout, // EN: Use the validated scan duration. TH: ใช้ระยะเวลาค้นหาที่ตรวจแล้ว
+    Future<void>? cancelSignal, // EN: Accept optional caller cancellation. TH: รับสัญญาณยกเลิกจาก caller ถ้ามี
+  }) async { // EN: Await permissions and adapter state. TH: รอสิทธิ์และสถานะ adapter
+    await _requestBlePermissions(); // EN: Ask for platform BLE permissions before scanning. TH: ขอสิทธิ์ BLE จากระบบก่อนค้นหา
+    _ensureActive(); // EN: Stop if the service was disposed while awaiting permissions. TH: หยุดหาก service ถูก dispose ระหว่างรอสิทธิ์
     final adapterState = await FlutterBluePlus.adapterState
         .firstWhere(isAdapterStateSettled)
         .timeout(const Duration(seconds: 8), onTimeout: () {
@@ -148,32 +148,32 @@ class BleService {
         'Bluetooth status is still starting. Wait a few seconds and scan again.',
       );
     });
-    final adapterMessage = adapterAvailabilityMessage(adapterState);
-    if (adapterMessage != null) {
-      throw StateError(adapterMessage);
-    }
-    _ensureActive();
-    await FlutterBluePlus.startScan(timeout: timeout);
+    final adapterMessage = adapterAvailabilityMessage(adapterState); // EN: Translate unavailable adapter states into guidance. TH: แปลงสถานะ adapter ที่ใช้ไม่ได้เป็นคำแนะนำ
+    if (adapterMessage != null) { // EN: Check whether Bluetooth is ready. TH: ตรวจว่า Bluetooth พร้อมหรือไม่
+      throw StateError(adapterMessage); // EN: Stop with a user-actionable message. TH: หยุดพร้อมข้อความที่ผู้ใช้แก้ได้
+    } // EN: Finish adapter readiness check. TH: จบการตรวจความพร้อม adapter
+    _ensureActive(); // EN: Recheck disposal after the adapter wait. TH: ตรวจ dispose อีกครั้งหลังรอ adapter
+    await FlutterBluePlus.startScan(timeout: timeout); // EN: Start the native BLE scan with a deadline. TH: เริ่มสแกน BLE พร้อมกำหนดเวลาจบ
     try {
       final scanFinished = FlutterBluePlus.isScanning
           .where((scanning) => !scanning)
           .first
           .timeout(timeout + const Duration(seconds: 2))
           .then<void>((_) {});
-      if (cancelSignal == null) {
-        await scanFinished;
+      if (cancelSignal == null) { // EN: Wait for the plugin's normal scan completion. TH: รอการค้นหาจบตามปกติของ plugin
+        await scanFinished; // EN: Continue only after scan ends. TH: ทำต่อเมื่อการค้นหาจบแล้ว
       } else {
-        await Future.any<void>([scanFinished, cancelSignal]);
+        await Future.any<void>([scanFinished, cancelSignal]); // EN: Stop waiting when either scan or cancellation completes. TH: หยุดรอเมื่อค้นหาจบหรือถูกยกเลิก
       }
     } on TimeoutException {
       // Stop explicitly if the plugin/platform did not end the timed scan.
     } finally {
-      if (FlutterBluePlus.isScanningNow) {
-        await FlutterBluePlus.stopScan();
+      if (FlutterBluePlus.isScanningNow) { // EN: Check whether native scanning remains active. TH: ตรวจว่ายังสแกนผ่านระบบอยู่หรือไม่
+        await FlutterBluePlus.stopScan(); // EN: Stop the plugin scan before returning results. TH: หยุดการค้นหาของ plugin ก่อนคืนผล
       }
     }
-    final results = FlutterBluePlus.lastScanResults;
-    _ensureActive();
+    final results = FlutterBluePlus.lastScanResults; // EN: Read the latest scan results after stopping. TH: อ่านผลค้นหาล่าสุดหลังหยุดสแกน
+    _ensureActive(); // EN: Do not publish results from a disposed service. TH: ไม่ส่งผลจาก service ที่ถูก dispose แล้ว
     // TH: แสดงเฉพาะชื่อที่มี Doz หรือ service UUID ของ firmware เพื่อไม่ให้ผู้ใช้เลือก
     //     บอร์ด ESP32/อุปกรณ์ BLE อื่นที่ไม่รองรับโดยไม่ตั้งใจ
     // EN: show only Doz-named advertisements or the firmware service UUID, so users
@@ -187,9 +187,9 @@ class BleService {
               expectedServiceUuid: configuredServiceUuid,
             ))
         .toList();
-    _lastFoundDevice = matches.isEmpty ? null : matches.first.device;
-    return matches;
-  }
+    _lastFoundDevice = matches.isEmpty ? null : matches.first.device; // EN: Remember one matching device for the connect shortcut. TH: จำอุปกรณ์ที่ตรงหนึ่งตัวไว้ใช้เชื่อมต่ออย่างเร็ว
+    return matches; // EN: Show only devices passing the Doz discovery filter. TH: คืนเฉพาะอุปกรณ์ที่ผ่านตัวกรอง Doz
+  } // EN: Finish the plugin scan and result filtering. TH: จบการค้นหาผ่าน plugin และกรองผล
 
   Future<void> stopScan() async {
     if (FlutterBluePlus.isScanningNow) {
@@ -223,7 +223,7 @@ class BleService {
       state != BluetoothAdapterState.turningOn;
 
   /// Only show the Doz device, not every nearby ESP32 or BLE peripheral.
-  /// A matching service UUID is preferred; the advertised Doz name is retained
+  /// A matching service UUID is preferred; the firmware's exact advertised name is retained
   /// as a discovery fallback because some platforms omit service UUIDs in scans.
   /// EN: This is a discovery filter, not device authentication; BLE identity is not cryptographically verified.
   /// TH: นี่เป็นตัวกรองค้นหา ไม่ใช่การยืนยันตัวอุปกรณ์; ยังไม่มีการตรวจ identity ด้วย cryptography
@@ -236,9 +236,12 @@ class BleService {
     final serviceMatches = serviceUuids.any(
       (uuid) => uuid.toLowerCase() == expectedServiceUuid.toLowerCase(),
     );
-    final hasDozName =
-        '$platformName $advertisedName'.toLowerCase().contains('doz');
-    return serviceMatches || hasDozName;
+    final firmwareNameMatches = platformName.trim().toLowerCase() ==
+            'doz-esp32s3' || // EN: Match the current firmware's platform name exactly. TH: เทียบชื่อ platform กับเฟิร์มแวร์ปัจจุบันแบบตรงตัว
+        advertisedName.trim().toLowerCase() ==
+            'doz-esp32s3'; // EN: Accept the same name from advertisement data. TH: รับชื่อเดียวกันจากข้อมูลโฆษณา BLE
+    return serviceMatches ||
+        firmwareNameMatches; // EN: Avoid matching unrelated names containing "doz". TH: ไม่รับชื่ออุปกรณ์อื่นที่เพียงมีคำว่า "doz"
   }
 
   Future<void> connectLastFound() async {

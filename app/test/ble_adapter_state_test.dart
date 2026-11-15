@@ -74,6 +74,15 @@ void main() {
         ),
         isTrue,
       );
+      expect(
+        BleService.matchesDozAdvertisement(
+          platformName: 'Dozen headphones',
+          advertisedName: '',
+          serviceUuids: const [],
+          expectedServiceUuid: BleService.defaultServiceUuid,
+        ),
+        isFalse,
+      );
     });
   });
 }
