@@ -1,5 +1,9 @@
-// Draft notice for the current prototype. Obtain legal review and fill the
-// controller/processor/retention details before any public release.
+// EN: Keep the Thai and English draft notice text in one source for the app's privacy dialog.
+// TH: เก็บข้อความร่างประกาศภาษาไทยและอังกฤษไว้ในไฟล์เดียวสำหรับหน้าประกาศของแอป
+// EN: Obtain legal review and fill controller, processor, and retention details before public release.
+// TH: ต้องให้ผู้เกี่ยวข้องตรวจทานและระบุผู้ควบคุม/ผู้ประมวลผลข้อมูลกับระยะเวลาเก็บก่อนเผยแพร่
+// EN: This is the Thai notice shown when the app language is Thai.
+// TH: ข้อความต่อไปนี้คือร่างประกาศภาษาไทยที่แสดงเมื่อเลือกภาษาไทย
 const privacyPolicyTextTh = '''
 doz — ร่างประกาศความเป็นส่วนตัวสำหรับแอปต้นแบบ
 ฉบับร่าง 1.1 | ปรับปรุง 11 พฤศจิกายน 2569
@@ -49,6 +53,8 @@ doz เป็นต้นแบบเชื่อมต่ออุปกรณ�
 เมื่อมีการเปลี่ยนแปลงสาระสำคัญ ผู้พัฒนาจะปรับเลขฉบับและแจ้งให้ผู้ใช้ทราบตามช่องทางที่จัดทำขึ้น
 ''';
 
+// EN: This is the English notice shown when the app language is English.
+// TH: ข้อความต่อไปนี้คือร่างประกาศภาษาอังกฤษที่แสดงเมื่อเลือกภาษาอังกฤษ
 const privacyPolicyTextEn = '''
 doz — Prototype Privacy Notice (Draft)
 Draft 1.1 | Updated 11 November 2026
