@@ -1,0 +1,74 @@
+# EN: Check source and buildability before any Render deployment; this workflow never deploys.
+# TH: ตรวจโค้ดและการ build ก่อนเผยแพร่บน Render; workflow นี้ไม่สั่ง deploy
+name: Verify Doz source
+
+# EN: Check the deploy branch and pull requests that may change the deployed source.
+# TH: ตรวจ branch ที่ใช้ deploy และ pull request ที่อาจแก้โค้ดเผยแพร่
+'on':
+  push:
+    branches: [render-api-deploy]
+  pull_request:
+  workflow_dispatch:
+
+# EN: Tests only need repository read access.
+# TH: การทดสอบต้องใช้สิทธิ์อ่าน repository เท่านั้น
+permissions:
+  contents: read
+
+jobs:
+  # EN: Verify the ESP32 acquisition firmware and Flutter decoder agree on BLE wire fields.
+  # TH: ตรวจว่า firmware เก็บข้อมูลกับตัวถอดรหัส Flutter ใช้ฟิลด์ BLE ตรงกัน
+  ble-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check BLE contract
+        run: python3 scripts/check_ble_contract.py
+
+  # EN: Run Cloud API tests under the Python version configured on Render.
+  # TH: รันทดสอบ Cloud API ด้วย Python เวอร์ชันที่ตั้งค่าไว้บน Render
+  cloud-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Install API test dependencies
+        working-directory: app/cloud_api
+        run: python -m pip install -r requirements-dev.txt
+      - name: Test Cloud API
+        working-directory: app/cloud_api
+        run: python -m pytest -q
+
+  # EN: Match Render's pinned Flutter version and test the web build with dummy public values.
+  # TH: ใช้ Flutter เวอร์ชันเดียวกับ Render และลอง build เว็บด้วยค่า public สำหรับทดสอบ
+  flutter-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install pinned Flutter SDK
+        run: |
+          git clone --depth 1 --branch 3.44.1 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: Resolve Flutter dependencies
+        working-directory: app
+        run: flutter pub get
+      - name: Analyze Flutter code
+        working-directory: app
+        run: flutter analyze --no-pub
+      - name: Test Flutter app
+        working-directory: app
+        run: flutter test --no-pub
+      - name: Build web without real credentials
+        working-directory: app
+        env:
+          DOZ_SUPABASE_URL: https://example.supabase.co
+          DOZ_SUPABASE_PUBLISHABLE_KEY: sb_publishable_build_test
+        run: bash scripts/render_build_web.sh
