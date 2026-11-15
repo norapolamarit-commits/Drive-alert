@@ -352,7 +352,7 @@ class SupabaseChatAuthTests(unittest.TestCase):
 
     def test_health_data_read_routes_require_authentication(self):
         client = TestClient(main.app)
-        for path in ("/sensor", "/alert", "/devices"):
+        for path in ("/sensor", "/alert", "/devices", "/overview"):
             with self.subTest(path=path):
                 self.assertEqual(client.get(path).status_code, 401)
 
@@ -360,13 +360,28 @@ class SupabaseChatAuthTests(unittest.TestCase):
         client = TestClient(main.app)
         with patch("main._verify_chat_user", return_value="user-123"):
             with patch.dict(os.environ, {"HEALTH_DATA_SYNC_ENABLED": "false"}):
-                for path in ("/sensor", "/alert", "/devices"):
+                for path in ("/sensor", "/alert", "/devices", "/overview"):
                     with self.subTest(path=path):
                         response = client.get(
                             path,
                             headers={"Authorization": "Bearer valid-token"},
                         )
                         self.assertEqual(response.status_code, 503)
+
+    def test_overview_counts_only_the_authenticated_account(self):
+        client = TestClient(main.app)
+        main.SENSOR_EVENTS.extend([
+            {"authUserId": "user-123", "riskResult": {"alertLevel": "Warning"}},
+            {"authUserId": "user-123", "riskResult": {"alertLevel": "Safe"}},
+            {"authUserId": "other", "riskResult": {"alertLevel": "Emergency"}},
+        ])
+        with patch("main._verify_chat_user", return_value="user-123"):
+            with patch.dict(os.environ, {"HEALTH_DATA_SYNC_ENABLED": "true", "HEALTH_DATA_MEMORY_STORAGE_ENABLED": "true"}):
+                response = client.get("/overview", headers={"Authorization": "Bearer valid-token"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["windowSize"], 2)
+        self.assertEqual(response.json()["levelCounts"]["Warning"], 1)
+        self.assertEqual(response.json()["levelCounts"]["Emergency"], 0)
 
     def test_health_data_write_routes_are_disabled_without_storing(self):
         client = TestClient(main.app)

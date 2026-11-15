@@ -8,6 +8,7 @@ import '../main.dart';
 import '../models/alert_record.dart';
 import '../widgets/alert_level_badge.dart';
 import '../widgets/status_card.dart';
+import '../ui_text.dart';
 
 // EN: Show recorded alerts and actions for the latest unanswered alert.
 // TH: แสดงประวัติ alert และปุ่มตอบรับเฉพาะ alert ล่าสุดที่ยังไม่มีคำตอบ
@@ -25,7 +26,8 @@ class AlertHistoryScreen extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         Text(
-          'Risk Alert Log',
+          uiText(context,
+              english: 'Alert history', thai: 'ประวัติการแจ้งเตือน'),
           style: Theme.of(context)
               .textTheme
               .headlineSmall
@@ -48,7 +50,8 @@ class AlertHistoryScreen extends StatelessWidget {
           _LatestResponseButtons(),
         const SizedBox(height: 12),
         Text(
-          'Alert History',
+          uiText(context,
+              english: 'Earlier alerts', thai: 'การแจ้งเตือนก่อนหน้า'),
           style: Theme.of(context)
               .textTheme
               .titleLarge
@@ -56,9 +59,20 @@ class AlertHistoryScreen extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         if (alerts.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(top: 32),
-            child: Center(child: Text('No alert history yet.')),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 32),
+            child: Center(
+              child: Column(
+                children: [
+                  const Icon(Icons.notifications_none_outlined,
+                      size: 36, color: Color(0xFFA7B0C0)),
+                  const SizedBox(height: 8),
+                  Text(uiText(context,
+                      english: 'No alerts recorded yet',
+                      thai: 'ยังไม่มีประวัติการแจ้งเตือน')),
+                ],
+              ),
+            ),
           )
         else
           ...alerts.map((alert) => _AlertCard(alertId: alert.id)),

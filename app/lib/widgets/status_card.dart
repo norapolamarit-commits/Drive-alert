@@ -34,15 +34,22 @@ class StatusCard extends StatelessWidget {
     // EN: Unknown means analysis is unavailable, never a safe result.
     // TH: Unknown หมายถึงยังวิเคราะห์ไม่ได้ ไม่ใช่ผลว่าปลอดภัย
     final analysisUnavailable = alertLevel.toLowerCase() == 'unknown';
-    final statusAccent =
-        analysisUnavailable ? const Color(0xFF9AA4B2) : const Color(0xFF34D399);
+    // EN: Match the main status color to the canonical alert level.
+    // TH: ให้สีสถานะหลักตรงกับระดับแจ้งเตือนมาตรฐาน
+    final statusAccent = switch (alertLevel.toLowerCase()) {
+      'safe' => const Color(0xFF34D399),
+      'watch' => const Color(0xFFF2C94C),
+      'warning' => const Color(0xFFF2994A),
+      'emergency' => const Color(0xFFEB5757),
+      _ => const Color(0xFF9AA4B2),
+    };
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(compact ? 14 : 20),
       decoration: BoxDecoration(
         color: const Color(0xFF11141B),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF232833)),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: statusAccent.withValues(alpha: 0.45)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.06),
@@ -59,7 +66,7 @@ class StatusCard extends StatelessWidget {
               Icon(
                 Icons.health_and_safety_outlined,
                 size: compact ? 26 : 32,
-                color: analysisUnavailable ? statusAccent : null,
+                color: statusAccent,
               ),
               SizedBox(width: compact ? 10 : 12),
               Expanded(
@@ -83,12 +90,8 @@ class StatusCard extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: const Color(0xFF0E1622),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: analysisUnavailable
-                    ? const Color(0xFF343B4A)
-                    : const Color(0xFF1E3A2F),
-              ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: statusAccent.withValues(alpha: 0.4)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

@@ -18,6 +18,7 @@ from fastapi import FastAPI, Header, HTTPException, Query, Request  # EN: Define
 from fastapi.middleware.cors import CORSMiddleware  # EN: Allow only the configured Flutter web origin to call this API. TH: อนุญาตเฉพาะ origin เว็บ Flutter ที่กำหนดให้เรียก API
 from fastapi.responses import HTMLResponse  # EN: Return escaped local dashboard markup. TH: ส่ง markup dashboard ภายในที่ escape แล้ว
 from pydantic import BaseModel, ConfigDict, Field  # EN: Validate API request schemas and field constraints. TH: ตรวจ schema request API และข้อจำกัด field
+from sheets_storage import SheetsStorageError, store_from_env  # EN: Use server-only Google Sheets storage when configured. TH: ใช้ Google Sheets ผ่านเซิร์ฟเวอร์เมื่อกำหนดค่า
 
 try:  # EN: Make Firestore an optional deployment dependency. TH: ทำให้ Firestore เป็น dependency ที่เลือกเปิดได้
     from google.cloud import firestore  # EN: Load the Firestore client only when the package is installed. TH: โหลด client Firestore เมื่อมี package ติดตั้ง
@@ -287,6 +288,9 @@ ALERT_EVENTS: list[dict[str, Any]] = []
 FIRESTORE_COLLECTION_PREFIX = os.getenv("FIRESTORE_COLLECTION_PREFIX", "vita_guard")
 USE_FIRESTORE = os.getenv("USE_FIRESTORE", "").lower() in {"1", "true", "yes"}
 _FIRESTORE_CLIENT = firestore.Client() if USE_FIRESTORE and firestore else None
+_SHEETS_STORE = store_from_env()  # EN: Initialize the optional server-side Sheets backend. TH: เริ่มระบบ Sheets ฝั่งเซิร์ฟเวอร์เมื่อมี config
+if _SHEETS_STORE and _FIRESTORE_CLIENT:
+    raise RuntimeError("Choose exactly one persistent health-data backend")
 
 
 class CloudPayload(BaseModel):  # EN: Model a bounded cloud event while preserving supported extra fields. TH: แทน cloud event ที่จำกัดขนาดและคง field เพิ่มเติมที่รองรับ
@@ -379,7 +383,7 @@ def _require_health_data_sync_enabled() -> None:  # EN: Keep health-data routes 
         )  # EN: Stop before storage operations. TH: หยุดก่อนเข้าถึง storage
     # EN: Do not claim sync succeeded when only process memory is available.
     # TH: ห้ามแจ้งว่าสำเร็จเมื่อมีเพียงหน่วยความจำชั่วคราว เว้นแต่เปิด opt-in สำหรับพัฒนา
-    if not _FIRESTORE_CLIENT and not _memory_health_storage_enabled():  # EN: Require durable storage unless a developer explicitly opted into memory mode. TH: ต้องมี storage ถาวร เว้นแต่นักพัฒนาเปิดโหมด memory อย่างชัดเจน
+    if not _FIRESTORE_CLIENT and not _SHEETS_STORE and not _memory_health_storage_enabled():  # EN: Require configured storage unless memory mode is explicitly enabled. TH: ต้องมี storage ที่ตั้งค่าไว้หรือเปิด memory mode ชัดเจน
         raise HTTPException(  # EN: Fail closed when only non-durable storage exists. TH: ปิดการเขียนเมื่อมีแต่ storage ที่ไม่ถาวร
             status_code=503,  # EN: Report storage readiness failure. TH: แจ้งว่า storage ยังไม่พร้อม
             detail="Persistent health-data storage is unavailable.",  # EN: Avoid claiming durable sync. TH: ไม่กล่าวอ้างว่า sync แบบถาวรสำเร็จ
@@ -462,9 +466,14 @@ def delete_account(authorization: Optional[str] = Header(default=None)):  # EN: 
             detail="Account deletion is not configured on this server.",  # EN: Give a safe configuration message. TH: แจ้งข้อความ config ที่ปลอดภัย
         )  # EN: Stop the deletion flow without side effects. TH: หยุดขั้นตอนลบโดยไม่ทำ side effect
 
+    # EN: Clearing Sheets cells cannot guarantee erasure from version history.
+    # TH: การล้างค่าใน Sheets ไม่รับประกันการลบจากประวัติเวอร์ชัน
+    if _SHEETS_STORE:
+        raise HTTPException(status_code=503, detail="Account deletion is unavailable with Google Sheets storage.")
+
     # EN: Do not delete the identity when health records cannot be checked/deleted.
     # TH: ห้ามลบบัญชีเมื่อยังตรวจ/ลบข้อมูลสุขภาพใน persistent storage ไม่ได้
-    if not _FIRESTORE_CLIENT and not _memory_health_storage_enabled():  # EN: Require a place where account data can be enumerated and removed. TH: ต้องมี storage ที่ใช้ไล่และลบข้อมูลบัญชีได้
+    if not _FIRESTORE_CLIENT and not _SHEETS_STORE and not _memory_health_storage_enabled():  # EN: Require a storage backend that supports deletion. TH: ต้องมี storage ที่ลบข้อมูลได้
         # EN: Preserve the account when its health records cannot be safely checked. TH: คงบัญชีไว้เมื่อยังตรวจข้อมูลสุขภาพที่ต้องลบไม่ได้
         raise HTTPException(  # EN: Preserve the identity when its data cannot be audited for deletion. TH: คง identity ไว้เมื่อยังตรวจข้อมูลเพื่อลบไม่ได้
             status_code=503,  # EN: Report the storage dependency as unavailable. TH: แจ้งว่า storage dependency ยังใช้ไม่ได้
@@ -529,6 +538,8 @@ def sensor_events(  # EN: Read recent sensor events for one verified account. TH
 ):  # EN: Return the authenticated account's recent sensor events. TH: คืน sensor event ล่าสุดของบัญชีที่ยืนยันแล้ว
     user_id = _verify_chat_user(authorization)  # EN: Derive the query owner from verified identity. TH: ระบุเจ้าของข้อมูลจาก identity ที่ยืนยันแล้ว
     _require_health_data_sync_enabled()  # EN: Apply the deployment's health-sync gate. TH: ตรวจ gate การ sync ข้อมูลสุขภาพของ deployment
+    if _SHEETS_STORE:
+        return _read_sheets_events("sensor_events", user_id, limit)
     if _FIRESTORE_CLIENT:  # EN: Prefer durable storage when it is configured. TH: ใช้ storage ถาวรก่อนเมื่อมีการตั้งค่า
         return _read_firestore_events("sensor_events", user_id, limit)  # EN: Read a bounded page for this account from persistent storage. TH: อ่านข้อมูลของบัญชีนี้จาก persistent storage ตามจำนวนจำกัด
     events = [event for event in SENSOR_EVENTS if event.get("authUserId") == user_id]  # EN: Filter process-local records by authenticated owner. TH: กรอง record ในหน่วยความจำตามเจ้าของที่ยืนยันแล้ว
@@ -542,17 +553,45 @@ def alert_events(  # EN: Read recent alerts for one verified account. TH: อ่
 ):  # EN: Return only the authenticated account's recent alerts. TH: คืนเฉพาะ alert ล่าสุดของบัญชีที่ยืนยันแล้ว
     user_id = _verify_chat_user(authorization)  # EN: Resolve the alert owner from verified identity. TH: ระบุเจ้าของ alert จาก identity ที่ยืนยันแล้ว
     _require_health_data_sync_enabled()  # EN: Enforce the configured health-data sync policy. TH: บังคับใช้นโยบาย sync ข้อมูลสุขภาพที่ตั้งไว้
+    if _SHEETS_STORE:
+        return _read_sheets_events("alert_events", user_id, limit)
     if _FIRESTORE_CLIENT:  # EN: Prefer durable storage when it is configured. TH: ใช้ storage ถาวรก่อนเมื่อมีการตั้งค่า
         return _read_firestore_events("alert_events", user_id, limit)  # EN: Read a bounded page from persistent storage. TH: อ่านข้อมูล persistent แบบจำกัดจำนวน
     events = [event for event in ALERT_EVENTS if event.get("authUserId") == user_id]  # EN: Exclude records owned by other users. TH: ตัด record ที่เป็นของผู้ใช้อื่นออก
     return events[-limit:]  # EN: Return only the newest requested alerts. TH: คืน alert ล่าสุดตามจำนวนที่ร้องขอ
 
 
+@app.get("/overview")
+def account_overview(authorization: Optional[str] = Header(default=None)):
+    """EN: Return a small, authenticated event summary. TH: คืนสรุป event ขนาดเล็กสำหรับบัญชีที่ยืนยันแล้ว"""
+    # EN: Bind the summary to a verified identity before any data read. TH: ผูกสรุปกับตัวตนที่ยืนยันก่อนอ่านข้อมูล
+    user_id = _verify_chat_user(authorization)
+    # EN: Apply the same storage policy as event history routes. TH: ใช้นโยบาย storage เดียวกับ route ประวัติ
+    _require_health_data_sync_enabled()
+    # EN: Keep the source bounded even when durable storage exists. TH: จำกัดจำนวนข้อมูลต้นทางแม้มี storage ถาวร
+    if _SHEETS_STORE:
+        events = _read_sheets_events("sensor_events", user_id, 100)
+    elif _FIRESTORE_CLIENT:
+        events = _read_firestore_events("sensor_events", user_id, 100)
+    else:
+        events = [event for event in SENSOR_EVENTS if event.get("authUserId") == user_id][-100:]
+    # EN: Count only known alert levels; unexpected values remain Unknown. TH: นับเฉพาะระดับที่รู้จัก ค่าอื่นเป็น Unknown
+    counts = {level: 0 for level in ("Safe", "Watch", "Warning", "Emergency", "Unknown")}
+    for event in events:
+        result = event.get("riskResult") or {}
+        level = result.get("alertLevel") if isinstance(result, dict) else None
+        counts[level if isinstance(level, str) and level in counts else "Unknown"] += 1
+    # EN: Return aggregate metadata without echoing raw health readings. TH: ส่งเฉพาะสรุปโดยไม่สะท้อนค่าชีวสัญญาณดิบ
+    return {"windowSize": len(events), "levelCounts": counts}
+
+
 @app.get("/devices")
 def devices(authorization: Optional[str] = Header(default=None)):  # EN: List devices associated with the authenticated account. TH: แสดงอุปกรณ์ของบัญชีที่ยืนยันแล้ว
     user_id = _verify_chat_user(authorization)  # EN: Bind the device list to the verified account. TH: ผูกรายการอุปกรณ์กับบัญชีที่ยืนยันแล้ว
     _require_health_data_sync_enabled()  # EN: Apply the health-data sync gate. TH: ตรวจ gate การ sync ข้อมูลสุขภาพ
-    if _FIRESTORE_CLIENT:  # EN: Discover devices from durable events when available. TH: ค้นหาอุปกรณ์จาก event ถาวรเมื่อมี
+    if _SHEETS_STORE:
+        events = _read_sheets_events("sensor_events", user_id, 100)
+    elif _FIRESTORE_CLIENT:  # EN: Discover devices from durable events when available. TH: ค้นหาอุปกรณ์จาก event ถาวรเมื่อมี
         # EN: Read at most one newest record per allowed device to discover device IDs. TH: อ่าน record ล่าสุดไม่เกินหนึ่งรายการต่ออุปกรณ์เพื่อหา device ID
         events = _read_firestore_events(  # EN: Load bounded recent events to summarize registered devices. TH: โหลด event ล่าสุดแบบจำกัดจำนวนเพื่อสรุปอุปกรณ์ที่ลงทะเบียน
             "sensor_events",  # EN: Use sensor events as the current source of device sightings. TH: ใช้ sensor event เป็นแหล่งพบอุปกรณ์ล่าสุด
@@ -748,12 +787,12 @@ def sensor(  # EN: Accept one validated sensor event for the authenticated accou
     event = _sanitize_sensor_event(event)  # EN: Persist only validated fields required by the app. TH: บันทึกเฉพาะ field ที่ตรวจแล้วและแอปจำเป็นต้องใช้
     event["authUserId"] = user_id  # EN: Store the server-controlled owner for later access filtering. TH: บันทึกเจ้าของที่ server ควบคุมเพื่อใช้กรองสิทธิ์ภายหลัง
     event["receivedAt"] = datetime.utcnow().isoformat()  # EN: Record server receipt time separately from client time. TH: บันทึกเวลารับจาก server แยกจากเวลาที่ client ส่ง
-    persisted = _write_firestore("sensor_events", event)  # EN: Persist the event and propagate storage errors. TH: บันทึก event และส่งต่อข้อผิดพลาดจาก storage
+    persisted = _write_health_event("sensor_events", event)  # EN: Write to the configured persistent store. TH: เขียนลง storage ที่ตั้งค่าไว้
     _append_bounded_event(SENSOR_EVENTS, event)  # EN: Keep a bounded in-process copy for fallback reads. TH: เก็บสำเนาใน process ตามเพดานสำหรับอ่านแบบ fallback
     # EN: Report whether persistence is durable without exposing a process-wide event count. TH: แจ้งว่าข้อมูลถาวรหรือไม่โดยไม่เปิดเผยจำนวน event รวมทั้ง process
     return {  # EN: Return the acceptance status without echoing health values. TH: คืนสถานะรับข้อมูลโดยไม่ส่งค่าชีวสัญญาณกลับ
         "ok": True,  # EN: Confirm the validated event was accepted. TH: ยืนยันว่า event ผ่าน validation และรับไว้แล้ว
-        "storage": "firestore" if persisted else "memory-ephemeral",  # EN: Distinguish durable storage from temporary memory. TH: แยก storage ถาวรออกจากหน่วยความจำชั่วคราว
+        "storage": "google-sheets" if _SHEETS_STORE else ("firestore" if persisted else "memory-ephemeral"),  # EN: Name the actual storage used. TH: ระบุ storage ที่ใช้จริง
     }  # EN: Finish the minimal sensor-ingest acknowledgement. TH: จบการตอบรับการรับ sensor แบบย่อ
 
 
@@ -812,12 +851,12 @@ def alert(  # EN: Accept one validated alert for the authenticated account. TH: 
     event = _sanitize_alert_event(event)  # EN: Drop unneeded profile and alert fields before persistence. TH: ตัดข้อมูลโปรไฟล์และ alert ที่ไม่จำเป็นก่อนบันทึก
     event["authUserId"] = user_id  # EN: Add the verified owner for future access checks. TH: เพิ่มเจ้าของที่ยืนยันแล้วสำหรับตรวจสิทธิ์ภายหลัง
     event["receivedAt"] = datetime.utcnow().isoformat()  # EN: Record server receipt time for ordering and audit. TH: บันทึกเวลารับของ server เพื่อเรียงลำดับและตรวจย้อนหลัง
-    persisted = _write_firestore("alert_events", event)  # EN: Persist and propagate storage failures. TH: บันทึก persistent และส่งต่อเมื่อเกิดปัญหา storage
+    persisted = _write_health_event("alert_events", event)  # EN: Persist and propagate storage failures. TH: บันทึกลง storage และส่งต่อเมื่อผิดพลาด
     _append_bounded_event(ALERT_EVENTS, event)  # EN: Keep a bounded in-process copy for fallback reads. TH: เก็บสำเนาใน process แบบจำกัดเพื่ออ่าน fallback
     # EN: Report durability without disclosing the process-wide alert count. TH: แจ้งชนิด storage โดยไม่เปิดเผยจำนวน alert รวมทั้ง process
     return {  # EN: Return the acceptance status without echoing alert contents. TH: คืนสถานะรับข้อมูลโดยไม่ส่งเนื้อหา alert กลับ
         "ok": True,  # EN: Confirm the validated alert was accepted. TH: ยืนยันว่า alert ผ่าน validation และรับไว้แล้ว
-        "storage": "firestore" if persisted else "memory-ephemeral",  # EN: Distinguish durable storage from temporary memory. TH: แยก storage ถาวรออกจากหน่วยความจำชั่วคราว
+        "storage": "google-sheets" if _SHEETS_STORE else ("firestore" if persisted else "memory-ephemeral"),  # EN: Name the actual storage used. TH: ระบุ storage ที่ใช้จริง
     }  # EN: Finish the minimal alert-ingest acknowledgement. TH: จบการตอบรับการรับ alert แบบย่อ
 
 
@@ -1531,6 +1570,25 @@ def _number(value: Any) -> Optional[float]:  # EN: Convert supported finite nume
         return number if math.isfinite(number) else None  # EN: Reject NaN and infinity. TH: ปฏิเสธ NaN และ infinity
     except (OverflowError, TypeError, ValueError):  # EN: Convert conversion failures into a validation result. TH: เปลี่ยนข้อผิดพลาดการแปลงให้เป็นผลตรวจข้อมูล
         return None  # EN: Keep malformed input from escaping as an exception. TH: ป้องกัน input ผิดรูปหลุดเป็น exception
+
+
+def _read_sheets_events(collection: str, user_id: str, limit: int) -> list[dict[str, Any]]:
+    """EN: Read only verified-owner rows from Sheets. TH: อ่านเฉพาะแถวของเจ้าของที่ยืนยันแล้ว"""
+    try:
+        return _SHEETS_STORE.read(collection, user_id, limit)
+    except SheetsStorageError as exc:
+        raise HTTPException(status_code=503, detail="Persistent health-data storage read failed.") from exc
+
+
+def _write_health_event(collection: str, event: dict[str, Any]) -> bool:
+    """EN: Route event writes to one configured backend. TH: ส่ง event ไปยัง storage ที่ตั้งค่าไว้หนึ่งแห่ง"""
+    if _SHEETS_STORE:
+        try:
+            _SHEETS_STORE.append(collection, event)
+            return True
+        except SheetsStorageError as exc:
+            raise HTTPException(status_code=503, detail="Persistent health-data storage write failed.") from exc
+    return _write_firestore(collection, event)
 
 
 def _write_firestore(collection: str, event: dict[str, Any]) -> bool:  # EN: Store an authenticated sanitized event in Firestore. TH: บันทึก event ที่ sanitize และยืนยันเจ้าของแล้วลง Firestore

@@ -125,10 +125,17 @@ class _HealthHistorySectionState extends State<HealthHistorySection> {
           )
         else
           GridView.count(
-            crossAxisCount: 2,
+            // EN: Give large text and narrow phones enough horizontal room.
+            // TH: เผื่อพื้นที่ให้ข้อความขนาดใหญ่และโทรศัพท์หน้าจอแคบ
+            crossAxisCount: MediaQuery.sizeOf(context).width < 370
+                ? 1
+                : MediaQuery.sizeOf(context).width >= 900
+                    ? 4
+                    : 2,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: 0.9,
+            childAspectRatio:
+                MediaQuery.sizeOf(context).width < 370 ? 1.4 : 0.9,
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
             children: [
@@ -205,13 +212,13 @@ class _MetricSummaryCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Container(
           padding: EdgeInsets.all(compact ? 10 : 12),
           decoration: BoxDecoration(
             color: const Color(0xFF11141B),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: selected ? Colors.white : const Color(0xFF232833),
               width: selected ? 2 : 1,

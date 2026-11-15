@@ -40,6 +40,18 @@ class DashboardScreen extends StatelessWidget {
     return ListView(
       padding: EdgeInsets.all(compact ? 8 : 16),
       children: [
+        // EN: Orient the user before presenting measurements and alerts.
+        // TH: บอกผู้ใช้ว่าหน้านี้แสดงอะไร ก่อนเข้าสู่ค่าการวัดและการแจ้งเตือน
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(
+            uiText(context,
+                english: 'Your status now', thai: 'สถานะของคุณตอนนี้'),
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+        ),
         _WatchConnectionCard(state: state),
         // EN: Make simulated values unmistakable whenever BLE is disconnected.
         // TH: ระบุว่าค่าเป็นข้อมูลจำลองเสมอเมื่อไม่ได้เชื่อม BLE
@@ -60,6 +72,14 @@ class DashboardScreen extends StatelessWidget {
           disclaimer: state.aiAdvice.isNotEmpty ? state.aiAdviceDisclaimer : '',
         ),
         SizedBox(height: compact ? 8 : 12),
+        // EN: Separate action-oriented status from supporting detail.
+        // TH: แยกสถานะที่ต้องใช้ตัดสินใจออกจากข้อมูลประกอบ
+        _SectionHeading(
+          title: uiText(context, english: 'At a glance', thai: 'ภาพรวม'),
+          subtitle: uiText(context,
+              english: 'Alerts and device readiness',
+              thai: 'การแจ้งเตือนและความพร้อมของอุปกรณ์'),
+        ),
         // EN: Summarize alerts and state separately from physical measurements.
         // TH: แยกสรุป alert และสถานะออกจากค่าที่เซนเซอร์วัด
         GridView.count(
@@ -102,6 +122,17 @@ class DashboardScreen extends StatelessWidget {
           ],
         ),
         SizedBox(height: compact ? 8 : 12),
+        _SectionHeading(
+          title: uiText(context,
+              english: 'Sensor readings', thai: 'ข้อมูลเซนเซอร์'),
+          subtitle: rawTelemetry
+              ? uiText(context,
+                  english: 'Raw device values · not a diagnosis',
+                  thai: 'ค่าดิบจากอุปกรณ์ · ไม่ใช่ผลวินิจฉัย')
+              : uiText(context,
+                  english: 'Example values for preview only',
+                  thai: 'ค่าตัวอย่างเพื่อดูหน้าจอเท่านั้น'),
+        ),
         // EN: Replace demo HR/SpO2 with raw optical counts when only telemetry exists.
         // TH: แสดง count แสงดิบแทนชีพจร/SpO2 สาธิตเมื่ออุปกรณ์ส่งเพียง telemetry
         GridView.count(
@@ -218,6 +249,38 @@ class DashboardScreen extends StatelessWidget {
         SizedBox(height: compact ? 8 : 12),
         if (state.profileDetailsProvided) _PersonalInfo(state: state),
       ],
+    );
+  }
+}
+
+// EN: Give each dashboard group a readable title and provenance cue.
+// TH: ตั้งหัวข้อแต่ละกลุ่มให้อ่านง่ายพร้อมระบุที่มาของค่า
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 6, 2, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 2),
+          Text(subtitle,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: const Color(0xFFA7B0C0))),
+        ],
+      ),
     );
   }
 }

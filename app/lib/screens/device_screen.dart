@@ -29,6 +29,10 @@ class DeviceScreen extends StatelessWidget {
         Text(copy('Connect to Doz over Bluetooth Low Energy (BLE).',
             'เชื่อมต่อ Doz ผ่าน Bluetooth Low Energy (BLE)')),
         const SizedBox(height: 18),
+        // EN: Explain the connection flow before asking for permissions.
+        // TH: อธิบายขั้นตอนการเชื่อมต่อก่อนขอสิทธิ์จากผู้ใช้
+        _ConnectionSteps(state: state),
+        const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -171,6 +175,65 @@ class DeviceScreen extends StatelessWidget {
 
   bool _needsLocationSettings(String status) =>
       status.toLowerCase().contains('location services');
+}
+
+// EN: Show transport and first-packet readiness as distinct steps.
+// TH: แสดงการเชื่อมต่อและการได้รับ packet แรกเป็นคนละขั้น
+class _ConnectionSteps extends StatelessWidget {
+  const _ConnectionSteps({required this.state});
+
+  final DozState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final connected = state.bleConnected;
+    final reading = connected && state.lastReadingWasFromDevice;
+    final steps = [
+      (
+        Icons.power_settings_new,
+        uiText(context,
+            english: 'Turn on the wearable', thai: 'เปิดอุปกรณ์สวมใส่'),
+        false
+      ),
+      (
+        Icons.bluetooth_searching,
+        uiText(context, english: 'Find and connect', thai: 'ค้นหาและเชื่อมต่อ'),
+        connected
+      ),
+      (
+        Icons.sensors,
+        uiText(context,
+            english: 'Wait for sensor data', thai: 'รอข้อมูลเซนเซอร์'),
+        reading
+      ),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF11141B),
+        border: Border.all(color: const Color(0xFF232833)),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < steps.length; i++)
+            Padding(
+              padding: EdgeInsets.only(bottom: i == steps.length - 1 ? 0 : 12),
+              child: Row(
+                children: [
+                  Icon(steps[i].$3 ? Icons.check_circle : steps[i].$1,
+                      color: steps[i].$3
+                          ? const Color(0xFF55D6A7)
+                          : const Color(0xFFA7B0C0)),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text('${i + 1}. ${steps[i].$2}')),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 // EN: Display received optical and motion telemetry without treating it as inference.

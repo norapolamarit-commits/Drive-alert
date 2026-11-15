@@ -23,6 +23,12 @@ services:
         value: "https://doz-web.onrender.com"
       - key: HEALTH_DATA_SYNC_ENABLED
         value: "false"
+      # A dedicated, private Google Sheet shared with the server service account.
+      - key: DOZ_SHEETS_SPREADSHEET_ID
+        sync: false
+      # Complete service-account JSON; keep it only in Render's protected environment.
+      - key: DOZ_GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
       # HuggingFace access token (router) สำหรับเรียก Pathumma LLM — ตั้งค่าใน Render dashboard
       - key: LLM_API_KEY
         sync: false
