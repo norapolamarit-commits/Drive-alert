@@ -34,6 +34,7 @@ flutter run \
 ```
 
 Never put a Supabase `service_role` or `sb_secret_` key in a mobile app. The app accepts a modern `sb_publishable_` key or a legacy JWT only when its decoded payload has `role=anon`; the release build script applies the same check. The redirect URI to allowlist in Supabase is `doz://login-callback/`.
+For the Render web app, also allowlist `https://doz-web.onrender.com/` in Supabase Auth redirect URLs. Web sign-up and password-recovery emails return to that web origin; Android and iOS keep the `doz://login-callback/` deep link.
 
 ## Install on Android / iOS
 

@@ -12,7 +12,7 @@
 ## 1. ตั้งค่า Supabase Auth
 
 1. สร้าง Supabase project และเปิด Email/Password ใน Authentication providers
-2. ตั้งค่า Site URL และ redirect allowlist ให้มี `doz://login-callback/`
+2. ตั้งค่า Site URL และ redirect allowlist ให้มี `doz://login-callback/` สำหรับ Android/iOS และ `https://doz-web.onrender.com/` สำหรับเว็บบน Render; หากเปลี่ยนโดเมนเว็บต้องเพิ่ม origin ใหม่ใน allowlist
 3. ตั้งอีเมล/SMTP และตรวจ email confirmation, reset-password template กับ deep link บนเครื่องจริง
 4. ใช้ Project URL และ **publishable key** เท่านั้น ห้ามใช้ `service_role` key ในแอป
 5. Supabase project ต้องตั้ง region, retention, email sender และผู้ประมวลผลให้ตรงกับประกาศความเป็นส่วนตัวฉบับที่จะเผยแพร่

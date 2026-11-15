@@ -5,6 +5,18 @@ import 'package:doz/services/auth_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('email callbacks use web origin on Render and mobile deep link on apps',
+      () {
+    final webBase = Uri.parse('https://doz-web.onrender.com/profile?tab=1');
+    expect(
+      AuthService.callbackUriForPlatform(isWeb: true, baseUri: webBase),
+      'https://doz-web.onrender.com/',
+    );
+    expect(
+      AuthService.callbackUriForPlatform(isWeb: false, baseUri: webBase),
+      AuthService.redirectUri,
+    );
+  });
   test('auth deep link is registered by both mobile platforms', () {
     final redirect = Uri.parse(AuthService.redirectUri);
     final androidManifest =

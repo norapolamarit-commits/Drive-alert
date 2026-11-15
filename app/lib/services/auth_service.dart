@@ -292,7 +292,7 @@ class AuthService {
       password: _validatedPassword(
           password), // EN: Preserve and size-check the password. TH: คงค่าและตรวจขนาด password
       emailRedirectTo:
-          redirectUri, // EN: Use only the registered app deep link. TH: ใช้เฉพาะ deep link ของแอปที่ลงทะเบียน
+          callbackUri, // EN: Return to the current web origin or registered mobile link. TH: กลับสู่ origin เว็บปัจจุบันหรือ deep link มือถือที่ลงทะเบียน
     ); // EN: Return the SDK account-creation future. TH: คืน future การสร้างบัญชีจาก SDK
   } // EN: Finish account registration. TH: จบการสมัครบัญชี
 
@@ -306,7 +306,7 @@ class AuthService {
       _validatedEmail(
           email), // EN: Normalize and bound the destination email. TH: ปรับและจำกัด email ปลายทาง
       redirectTo:
-          redirectUri, // EN: Restrict callback to the registered app link. TH: จำกัด callback ให้ใช้ deep link ที่ลงทะเบียน
+          callbackUri, // EN: Use a platform-correct recovery callback. TH: ใช้ callback กู้คืนที่ตรงกับแพลตฟอร์ม
     ); // EN: Return the SDK recovery request future. TH: คืน future คำขอกู้คืนจาก SDK
   } // EN: Finish password-reset request. TH: จบคำขอรีเซ็ตรหัสผ่าน
 
@@ -327,6 +327,19 @@ class AuthService {
   // TH: deep link ที่ลงทะเบียนไว้ใน manifest ของ Android และ iOS
   static const String redirectUri =
       'doz://login-callback/'; // EN: Match the Android/iOS registered callback URI. TH: ให้ตรงกับ callback URI ที่ลงทะเบียนใน Android/iOS
+
+  // EN: Browser email callbacks must return to the deployed web app, not a mobile deep link.
+  // TH: callback ทางอีเมลบน browser ต้องกลับเว็บที่ deploy ไม่ใช่ deep link ของมือถือ
+  static String get callbackUri =>
+      callbackUriForPlatform(isWeb: kIsWeb, baseUri: Uri.base);
+
+  // EN: Keep callback selection testable without launching a browser or Supabase.
+  // TH: แยกการเลือก callback เพื่อทดสอบได้โดยไม่ต้องเปิด browser หรือ Supabase
+  static String callbackUriForPlatform({
+    required bool isWeb,
+    required Uri baseUri,
+  }) =>
+      isWeb ? '${baseUri.origin}/' : redirectUri;
 
   // EN: Revoke the local/remote Supabase session through the SDK.
   // TH: ออกจากระบบและ revoke session ผ่าน SDK ของ Supabase
