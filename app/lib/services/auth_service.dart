@@ -330,16 +330,20 @@ class AuthService {
 
   // EN: Browser email callbacks must return to the deployed web app, not a mobile deep link.
   // TH: callback ทางอีเมลบน browser ต้องกลับเว็บที่ deploy ไม่ใช่ deep link ของมือถือ
-  static String get callbackUri =>
-      callbackUriForPlatform(isWeb: kIsWeb, baseUri: Uri.base);
+  static String get callbackUri => // EN: Choose the callback for the active platform. TH: เลือก callback ตามแพลตฟอร์มที่กำลังใช้
+      callbackUriForPlatform( // EN: Delegate selection to the tested helper. TH: ส่งการเลือกไปยัง helper ที่ทดสอบได้
+          isWeb: kIsWeb, // EN: Detect browser builds. TH: ตรวจว่าเป็น build เว็บหรือไม่
+          baseUri: Uri.base); // EN: Use the browser's current origin for web callbacks. TH: ใช้ origin ปัจจุบันของ browser สำหรับเว็บ
 
   // EN: Keep callback selection testable without launching a browser or Supabase.
   // TH: แยกการเลือก callback เพื่อทดสอบได้โดยไม่ต้องเปิด browser หรือ Supabase
-  static String callbackUriForPlatform({
-    required bool isWeb,
-    required Uri baseUri,
-  }) =>
-      isWeb ? '${baseUri.origin}/' : redirectUri;
+  static String callbackUriForPlatform({ // EN: Select a callback without relying on global platform state. TH: เลือก callback โดยไม่พึ่งสถานะแพลตฟอร์มส่วนกลาง
+    required bool isWeb, // EN: Indicate whether the caller runs in a browser. TH: ระบุว่า caller ทำงานใน browser หรือไม่
+    required Uri baseUri, // EN: Supply the current page URI for web origin extraction. TH: ส่ง URI ของหน้าปัจจุบันเพื่อหา origin เว็บ
+  }) => // EN: Return the platform-specific callback URI. TH: คืน callback URI ตามแพลตฟอร์ม
+      isWeb // EN: Select a browser or mobile callback. TH: เลือก callback สำหรับ browser หรือมือถือ
+          ? '${baseUri.origin}/' // EN: Return to the deployed web app's origin. TH: กลับไปยัง origin ของเว็บแอปที่ deploy
+          : redirectUri; // EN: Use the registered deep link on mobile. TH: ใช้ deep link ที่ลงทะเบียนไว้บนมือถือ
 
   // EN: Revoke the local/remote Supabase session through the SDK.
   // TH: ออกจากระบบและ revoke session ผ่าน SDK ของ Supabase
