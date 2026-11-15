@@ -131,12 +131,12 @@ void main() {
       }
 
       final hasDozName = random
-          .nextBool(); // EN: Vary advertised device names. TH: สลับชื่ออุปกรณ์ที่ประกาศ
+          .nextBool(); // EN: Vary the exact firmware name against unrelated names. TH: สลับชื่อเฟิร์มแวร์ที่ตรงตัวกับชื่ออุปกรณ์อื่น
       final hasService = random
           .nextBool(); // EN: Vary advertised service UUID presence. TH: สลับการประกาศ service UUID
       final match = BleService.matchesDozAdvertisement(
           platformName: hasDozName
-              ? 'doz-${random.nextInt(9999)}'
+              ? 'Doz-ESP32S3'
               : 'sensor-${random.nextInt(9999)}',
           advertisedName: '',
           serviceUuids:
