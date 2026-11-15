@@ -51,6 +51,12 @@ class SheetsStoreTests(unittest.TestCase):
             with self.assertRaises(SheetsStorageError):
                 store_from_env()
 
+    def test_malformed_json_shapes_fail_as_storage_errors(self):
+        for value in ("[]", "null", '"service_account"'):
+            with self.subTest(value=value):
+                with self.assertRaises(SheetsStorageError):
+                    SheetsStore("a" * 30, value)
+
     def test_invalid_sheets_setup_blocks_sync_even_with_memory_opt_in(self):
         with patch.object(main, "_SHEETS_CONFIG_ERROR", True):
             with patch.object(main, "_SHEETS_STORE", None):

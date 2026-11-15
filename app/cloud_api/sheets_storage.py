@@ -32,7 +32,7 @@ class SheetsStore:
             raise SheetsStorageError("Credentials are too large")
         try:
             info = json.loads(credentials_json)
-            if info.get("type") != "service_account":
+            if not isinstance(info, dict) or info.get("type") != "service_account":  # EN: Reject arrays and scalars before looking up credential fields. TH: ปฏิเสธ JSON ที่ไม่ใช่ออบเจ็กต์ก่อนอ่านข้อมูลรับรอง
                 raise ValueError("Expected service account")
             credentials = Credentials.from_service_account_info(
                 info, scopes=["https://www.googleapis.com/auth/spreadsheets"]
