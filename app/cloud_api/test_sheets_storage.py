@@ -6,6 +6,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 import main
+import setup_sheets
 from sheets_storage import HEADERS, SheetsStorageError, SheetsStore, store_from_env
 
 
@@ -56,6 +57,20 @@ class SheetsStoreTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(SheetsStorageError):
                     SheetsStore("a" * 30, value)
+
+    def test_setup_reports_incomplete_credentials_without_traceback(self):
+        with patch.dict("os.environ", {"DOZ_SHEETS_SPREADSHEET_ID": "a" * 30, "DOZ_GOOGLE_SERVICE_ACCOUNT_JSON": ""}):
+            self.assertEqual(setup_sheets.main(), 1)
+
+    def test_setup_rejects_malformed_metadata(self):
+        class BadMetadataStore:
+            base = "https://sheets.googleapis.com/v4/spreadsheets/test"
+
+            def _request(self, method, url, **kwargs):
+                return {"sheets": None}
+
+        with patch.object(setup_sheets, "store_from_env", return_value=BadMetadataStore()):
+            self.assertEqual(setup_sheets.main(), 1)
 
     def test_invalid_sheets_setup_blocks_sync_even_with_memory_opt_in(self):
         with patch.object(main, "_SHEETS_CONFIG_ERROR", True):
