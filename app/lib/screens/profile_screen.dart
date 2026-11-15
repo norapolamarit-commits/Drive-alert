@@ -245,6 +245,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _confirmLogout(BuildContext context, DozState state) async {
+    // EN: Ask before ending the session; keep this account's local data intact.
+    // TH: ขอคำยืนยันก่อนจบ session และคงข้อมูลในเครื่องของบัญชีนี้ไว้
     final confirm = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -264,7 +266,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
-    if (confirm == true) await state.logout();
+    if (confirm == true && context.mounted) await state.logout();
   }
 
   void _syncPersonalControllers(DozState state) {
@@ -279,6 +281,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _savePersonalInfo(DozState state) async {
+    // EN: Save optional profile fields locally, then leave edit mode if mounted.
+    // TH: บันทึกข้อมูลโปรไฟล์ที่ไม่บังคับในเครื่อง แล้วออกจากโหมดแก้ไขเมื่อหน้ายังเปิดอยู่
     await state.updatePersonalInfo(
       newWeight: double.tryParse(_weightController.text) ?? state.weight,
       newHeight: double.tryParse(_heightController.text) ?? state.height,
@@ -294,6 +298,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _selectBirthDate() async {
+    // EN: Limit selectable birthdays to past dates and a 120-year window.
+    // TH: จำกัดวันเกิดไว้ในอดีตและย้อนหลังได้ไม่เกิน 120 ปี
     final now = DateTime.now();
     final selected = await showDatePicker(
       context: context,
@@ -314,7 +320,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         );
       },
     );
-    if (selected == null) return;
+    if (selected == null || !mounted) return;
     setState(() {
       _birthDate = selected;
       _birthDateController.text = _formatBirthDate(selected);
