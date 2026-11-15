@@ -1,0 +1,7 @@
+# EN: Install the runtime dependencies before the API test runner.
+# TH: ติดตั้ง dependency สำหรับ runtime ก่อนเครื่องมือทดสอบ API
+-r requirements.txt
+
+# EN: Provide pytest for the backend regression suite.
+# TH: เพิ่ม pytest สำหรับชุดทดสอบ regression ของ backend
+pytest>=8,<10

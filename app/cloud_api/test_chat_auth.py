@@ -1,4 +1,4 @@
-from contextlib import redirect_stdout
+from contextlib import nullcontext, redirect_stdout
 from io import StringIO
 import os
 import unittest
@@ -174,13 +174,17 @@ class SupabaseChatAuthTests(unittest.TestCase):
         request = httpx.Request("POST", "https://router.example/v1/chat/completions")
         provider_response = httpx.Response(
             200,
-            json={"choices": [{"message": {"content": "Take a safe break."}}]},
+            stream=httpx.ByteStream(
+                b'{"choices":[{"message":{"content":"Take a safe break."}}]}'
+            ),
             request=request,
         )
         with patch("main._verify_chat_user", return_value="user-123"):
             with patch("main._retrieve", return_value=("Relevant safe-driving info", [])):
                 with patch("main.LLM_API_KEY", "test-server-key"):
-                    with patch("main.httpx.post", return_value=provider_response) as post:
+                    with patch(
+                        "main.httpx.stream", return_value=nullcontext(provider_response)
+                    ) as stream:
                         response = TestClient(main.app).post(
                             "/chat",
                             headers={"Authorization": "Bearer valid-token"},
@@ -194,8 +198,8 @@ class SupabaseChatAuthTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["mode"], "llm")
         self.assertEqual(response.json()["answer"], "Take a safe break.")
-        self.assertEqual(post.call_args.kwargs["headers"]["Authorization"], "Bearer test-server-key")
-        self.assertEqual(post.call_args.kwargs["json"]["model"], main.LLM_MODEL_DEFAULT)
+        self.assertEqual(stream.call_args.kwargs["headers"]["Authorization"], "Bearer test-server-key")
+        self.assertEqual(stream.call_args.kwargs["json"]["model"], main.LLM_MODEL_DEFAULT)
 
     def test_ai_rate_limit_applies_only_after_user_authentication(self):
         client = TestClient(main.app)
@@ -278,7 +282,7 @@ class SupabaseChatAuthTests(unittest.TestCase):
 
     def test_chat_rejects_oversized_user_content_before_auth_or_llm_calls(self):
         with patch("main._verify_chat_user") as verify:
-            with patch("main.httpx.post") as post:
+            with patch("main.httpx.stream") as stream:
                 response = TestClient(main.app).post(
                     "/chat",
                     json={"question": "x" * 2001, "prompt": "too long"},
@@ -286,13 +290,13 @@ class SupabaseChatAuthTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
         verify.assert_not_called()
-        post.assert_not_called()
+        stream.assert_not_called()
 
     def test_chat_provider_timeout_returns_explicit_fallback(self):
         with patch("main._verify_chat_user", return_value="user-123"):
             with patch("main._retrieve", return_value=("", [])):
                 with patch("main.LLM_API_KEY", "test-server-key"):
-                    with patch("main.httpx.post", side_effect=httpx.ReadTimeout("timeout")):
+                    with patch("main.httpx.stream", side_effect=httpx.ReadTimeout("timeout")):
                         response = TestClient(main.app).post(
                             "/chat",
                             headers={"Authorization": "Bearer valid-token"},
@@ -307,7 +311,7 @@ class SupabaseChatAuthTests(unittest.TestCase):
         log = StringIO()
         with patch("main.LLM_API_KEY", "test-api-key"):
             with patch(
-                "main.httpx.post",
+                "main.httpx.stream",
                 side_effect=RuntimeError("private prompt text and provider URL"),
             ):
                 with redirect_stdout(log):
