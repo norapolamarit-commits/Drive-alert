@@ -26,7 +26,6 @@ class DashboardScreen extends StatelessWidget {
     // TH: การเชื่อม BLE อย่างเดียวไม่ยืนยันว่าได้รับ packet จากอุปกรณ์แล้ว
     final hasDeviceReading =
         state.bleConnected && state.lastReadingWasFromDevice;
-    final waitingForDevicePacket = state.bleConnected && !hasDeviceReading;
     // EN: Show Red/IR counts only when both channels came from the device.
     // TH: แสดงค่า Red/IR เฉพาะเมื่อได้รับทั้งสองช่องจากอุปกรณ์จริง
     final rawTelemetry =
@@ -75,8 +74,10 @@ class DashboardScreen extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             uiText(context,
-                english: '8 measured channels • AI drowsiness alerts are not available with the current firmware.',
-                thai: 'ข้อมูลวัดจริง 8 ช่อง • เฟิร์มแวร์ปัจจุบันยังไม่แจ้งเตือนความง่วงด้วย AI'),
+                english:
+                    '8 measured channels • AI drowsiness alerts are not available with the current firmware.',
+                thai:
+                    'ข้อมูลวัดจริง 8 ช่อง • เฟิร์มแวร์ปัจจุบันยังไม่แจ้งเตือนความง่วงด้วย AI'),
             style: const TextStyle(color: Color(0xFFFFC66D)),
           ),
         ],
@@ -136,14 +137,17 @@ class DashboardScreen extends StatelessWidget {
               english: 'Sensor readings', thai: 'ข้อมูลเซนเซอร์'),
           subtitle: rawTelemetry
               ? uiText(context,
-                  english: '8 channels from device · 1-second means, not full waveforms',
-                  thai: 'ข้อมูล 8 ช่องจากอุปกรณ์ · ค่าเฉลี่ย 1 วินาที ไม่ใช่คลื่นสัญญาณเต็ม')
+                  english:
+                      '8 channels from device · 1-second means, not full waveforms',
+                  thai:
+                      'ข้อมูล 8 ช่องจากอุปกรณ์ · ค่าเฉลี่ย 1 วินาที ไม่ใช่คลื่นสัญญาณเต็ม')
               : uiText(context,
-                  english: 'Example values for preview only',
-                  thai: 'ค่าตัวอย่างเพื่อดูหน้าจอเท่านั้น'),
+                  english:
+                      'Waiting for device data · no sensor readings available',
+                  thai: 'รอข้อมูลจากอุปกรณ์ · ยังไม่มีค่าเซนเซอร์จริง'),
         ),
-        // EN: Replace demo HR/SpO2 with raw optical counts when only telemetry exists.
-        // TH: แสดง count แสงดิบแทนชีพจร/SpO2 สาธิตเมื่ออุปกรณ์ส่งเพียง telemetry
+        // EN: Display only the eight measured channels in the current firmware.
+        // TH: แสดงเฉพาะแปดช่องที่เฟิร์มแวร์ปัจจุบันวัดและส่งมา
         GridView.count(
           crossAxisCount: 2,
           shrinkWrap: true,
@@ -152,125 +156,46 @@ class DashboardScreen extends StatelessWidget {
           crossAxisSpacing: compact ? 8 : 10,
           mainAxisSpacing: compact ? 8 : 10,
           children: [
-            // EN: Show Red ADC counts; these are not calculated heart rate.
-            // TH: แสดง count Red จาก ADC ซึ่งไม่ใช่ค่าชีพจรที่คำนวณแล้ว
             SensorCard(
-                title: waitingForDevicePacket
-                    ? 'MAX30102 Red'
-                    : rawTelemetry
-                        ? 'MAX30102 Red mean'
-                        : uiText(context, english: 'Heart Rate', thai: 'ชีพจร'),
-                value: waitingForDevicePacket
-                    ? '—'
-                    : rawTelemetry
-                        ? '${sensor.rawRed}'
-                        : '${sensor.heartRate}',
-                unit: waitingForDevicePacket
-                    ? ''
-                    : rawTelemetry
-                        ? 'ADC'
-                        : 'BPM',
+                title: 'MAX30102 Red mean',
+                value: rawTelemetry ? '${sensor.rawRed}' : '—',
+                unit: rawTelemetry ? 'ADC' : '',
                 icon: Icons.favorite_outline),
-            // EN: Show IR ADC counts; these are not calculated SpO2.
-            // TH: แสดง count IR จาก ADC ซึ่งไม่ใช่ค่า SpO2 ที่คำนวณแล้ว
             SensorCard(
-                title: waitingForDevicePacket
-                    ? 'MAX30102 IR'
-                    : rawTelemetry
-                        ? 'MAX30102 IR mean'
-                        : uiText(context, english: 'SpO₂', thai: 'SpO₂'),
-                value: waitingForDevicePacket
-                    ? '—'
-                    : rawTelemetry
-                        ? '${sensor.rawIr}'
-                        : '${sensor.spo2}',
-                unit: waitingForDevicePacket
-                    ? ''
-                    : rawTelemetry
-                        ? 'ADC'
-                        : '%',
+                title: 'MAX30102 IR mean',
+                value: rawTelemetry ? '${sensor.rawIr}' : '—',
+                unit: rawTelemetry ? 'ADC' : '',
                 icon: Icons.air_outlined),
-            // EN: Show acceleration X in m/s² only for raw device telemetry.
-            // TH: แสดงความเร่งแกน X หน่วย m/s² เฉพาะข้อมูลจากอุปกรณ์
             SensorCard(
-                title: waitingForDevicePacket
-                    ? 'MPU6050 Accel X'
-                    : rawTelemetry
-                        ? 'MPU6050 Accel X'
-                        : uiText(context,
-                            english: 'Stress Level', thai: 'ระดับความเครียด'),
-                value: waitingForDevicePacket
-                    ? '—'
-                    : rawTelemetry
-                        ? sensor.accelX.toStringAsFixed(2)
-                        : '${sensor.stressLevel}',
-                unit:
-                    waitingForDevicePacket ? '' : (rawTelemetry ? 'm/s²' : ''),
+                title: 'MPU6050 Accel X',
+                value: rawTelemetry ? sensor.accelX.toStringAsFixed(2) : '—',
+                unit: rawTelemetry ? 'm/s²' : '',
                 icon: Icons.bolt_outlined),
-            // EN: Keep the device Y axis distinct from demo GSR.
-            // TH: แยกความเร่งแกน Y ของอุปกรณ์จากค่า GSR สาธิต
             SensorCard(
-                title: waitingForDevicePacket
-                    ? 'MPU6050 Accel Y'
-                    : rawTelemetry
-                        ? 'MPU6050 Accel Y'
-                        : uiText(context, english: 'GSR', thai: 'GSR'),
-                value: waitingForDevicePacket
-                    ? '—'
-                    : rawTelemetry
-                        ? sensor.accelY.toStringAsFixed(2)
-                        : sensor.gsr.toStringAsFixed(0),
-                unit:
-                    waitingForDevicePacket ? '' : (rawTelemetry ? 'm/s²' : ''),
+                title: 'MPU6050 Accel Y',
+                value: rawTelemetry ? sensor.accelY.toStringAsFixed(2) : '—',
+                unit: rawTelemetry ? 'm/s²' : '',
                 icon: Icons.sensors_outlined),
-            // EN: Keep the device Z axis distinct from demo temperature.
-            // TH: แยกความเร่งแกน Z ของอุปกรณ์จากอุณหภูมิสาธิต
             SensorCard(
-                title: waitingForDevicePacket
-                    ? 'MPU6050 Accel Z'
-                    : rawTelemetry
-                        ? 'MPU6050 Accel Z'
-                        : uiText(context,
-                            english: 'Temperature', thai: 'อุณหภูมิ'),
-                value: waitingForDevicePacket
-                    ? '—'
-                    : rawTelemetry
-                        ? sensor.accelZ.toStringAsFixed(2)
-                        : sensor.temperature.toStringAsFixed(1),
-                unit: waitingForDevicePacket
-                    ? ''
-                    : (rawTelemetry ? 'm/s²' : '°C'),
+                title: 'MPU6050 Accel Z',
+                value: rawTelemetry ? sensor.accelZ.toStringAsFixed(2) : '—',
+                unit: rawTelemetry ? 'm/s²' : '',
                 icon: Icons.thermostat_outlined),
-            if (rawTelemetry || waitingForDevicePacket) ...[
-              SensorCard(
-                  title: 'MPU6050 Gyro X',
-                  value: waitingForDevicePacket
-                      ? '—'
-                      : sensor.gyroX.toStringAsFixed(2),
-                  unit: waitingForDevicePacket ? '' : '°/s',
-                  icon: Icons.screen_rotation_alt),
-              SensorCard(
-                  title: 'MPU6050 Gyro Y',
-                  value: waitingForDevicePacket
-                      ? '—'
-                      : sensor.gyroY.toStringAsFixed(2),
-                  unit: waitingForDevicePacket ? '' : '°/s',
-                  icon: Icons.screen_rotation),
-              SensorCard(
-                  title: 'MPU6050 Gyro Z',
-                  value: waitingForDevicePacket
-                      ? '—'
-                      : sensor.gyroZ.toStringAsFixed(2),
-                  unit: waitingForDevicePacket ? '' : '°/s',
-                  icon: Icons.rotate_90_degrees_ccw),
-            ] else
-              SensorCard(
-                  title: uiText(context,
-                      english: 'BLE Status', thai: 'สถานะ BLE'),
-                  value: uiText(context,
-                      english: 'Demo BLE', thai: 'BLE สาธิต'),
-                  unit: '',
-                  icon: Icons.bluetooth),
+            SensorCard(
+                title: 'MPU6050 Gyro X',
+                value: rawTelemetry ? sensor.gyroX.toStringAsFixed(2) : '—',
+                unit: rawTelemetry ? '°/s' : '',
+                icon: Icons.screen_rotation_alt),
+            SensorCard(
+                title: 'MPU6050 Gyro Y',
+                value: rawTelemetry ? sensor.gyroY.toStringAsFixed(2) : '—',
+                unit: rawTelemetry ? '°/s' : '',
+                icon: Icons.screen_rotation),
+            SensorCard(
+                title: 'MPU6050 Gyro Z',
+                value: rawTelemetry ? sensor.gyroZ.toStringAsFixed(2) : '—',
+                unit: rawTelemetry ? '°/s' : '',
+                icon: Icons.rotate_90_degrees_ccw),
           ],
         ),
         SizedBox(height: compact ? 8 : 12),

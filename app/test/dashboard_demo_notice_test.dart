@@ -93,6 +93,16 @@ void main() {
     expect(find.text('Safe'), findsNothing);
     expect(find.text('No AI or risk assessment is available in demo mode.'),
         findsOneWidget);
+    await tester.drag(find.byType(ListView), const Offset(0, -800));
+    await tester.pumpAndSettle();
+    expect(find.text('MAX30102 Red mean'), findsOneWidget);
+    expect(find.text('MAX30102 IR mean'), findsOneWidget);
+    expect(find.text('MPU6050 Gyro Z'), findsOneWidget);
+    expect(find.text('Heart Rate'), findsNothing);
+    expect(find.text('SpO₂'), findsNothing);
+    expect(find.text('Stress Level'), findsNothing);
+    expect(find.text('GSR'), findsNothing);
+    expect(find.text('Temperature'), findsNothing);
   });
 
   test('mock sensor updates never create a health-risk assessment', () async {
@@ -140,8 +150,8 @@ void main() {
     );
 
     expect(find.textContaining('Device connected'), findsOneWidget);
-    expect(find.text('MAX30102 Red'), findsOneWidget);
-    expect(find.text('MAX30102 IR'), findsOneWidget);
+    expect(find.text('MAX30102 Red mean'), findsOneWidget);
+    expect(find.text('MAX30102 IR mean'), findsOneWidget);
     expect(find.text('MPU6050 Accel X'), findsOneWidget);
     expect(find.text('MPU6050 Gyro X'), findsOneWidget);
     expect(find.text('MPU6050 Gyro Y'), findsOneWidget);
