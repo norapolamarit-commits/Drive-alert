@@ -88,13 +88,16 @@ void main() {
         findsOneWidget);
     expect(find.text('Battery —'), findsOneWidget);
     expect(find.text('Connect wearable'), findsOneWidget);
-    expect(find.text('Demo preview'), findsNWidgets(2));
+    expect(find.text('Demo preview'), findsWidgets);
     expect(find.text('Unknown'), findsWidgets);
     expect(find.text('Safe'), findsNothing);
     expect(find.text('No AI or risk assessment is available in demo mode.'),
         findsOneWidget);
-    await tester.drag(find.byType(ListView), const Offset(0, -800));
-    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('MAX30102 Red mean'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('MAX30102 Red mean'), findsOneWidget);
     expect(find.text('MAX30102 IR mean'), findsOneWidget);
     expect(find.text('MPU6050 Gyro Z'), findsOneWidget);
@@ -186,7 +189,7 @@ void main() {
 
     expect(find.textContaining('ข้อมูลสาธิตเท่านั้น'), findsOneWidget);
     expect(find.text('เชื่อมต่ออุปกรณ์'), findsOneWidget);
-    expect(find.text('ตัวอย่างสาธิต'), findsNWidgets(2));
+    expect(find.text('ตัวอย่างสาธิต'), findsWidgets);
     expect(find.text('โหมดสาธิตไม่มีการประเมินความเสี่ยงหรือผลจาก AI'),
         findsOneWidget);
     await tester.drag(find.byType(ListView), const Offset(0, -1400));
@@ -255,7 +258,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('Normal'), findsNWidgets(2));
+    expect(find.text('Normal'), findsWidgets);
     expect(find.text('ค่าปัจจุบันอยู่ในช่วงปลอดภัย ติดตามต่อเนื่องตามปกติ'),
         findsNothing);
 

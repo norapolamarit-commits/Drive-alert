@@ -45,16 +45,20 @@ class StatusCard extends StatelessWidget {
     };
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(compact ? 14 : 20),
+      padding: EdgeInsets.all(compact ? 18 : 24),
       decoration: BoxDecoration(
-        color: const Color(0xFF11141B),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: statusAccent.withValues(alpha: 0.45)),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF17252B), Color(0xFF101A21)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: statusAccent.withValues(alpha: 0.55)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
+            color: statusAccent.withValues(alpha: 0.07),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -63,10 +67,15 @@ class StatusCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.health_and_safety_outlined,
-                size: compact ? 26 : 32,
-                color: statusAccent,
+              Container(
+                width: compact ? 42 : 50,
+                height: compact ? 42 : 50,
+                decoration: BoxDecoration(
+                  color: statusAccent.withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(Icons.health_and_safety_outlined,
+                    size: compact ? 24 : 29, color: statusAccent),
               ),
               SizedBox(width: compact ? 10 : 12),
               Expanded(
@@ -89,9 +98,9 @@ class StatusCard extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF0E1622),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: statusAccent.withValues(alpha: 0.4)),
+              color: const Color(0xFF0C1920),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF30454A)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

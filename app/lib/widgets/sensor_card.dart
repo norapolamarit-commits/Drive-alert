@@ -27,24 +27,37 @@ class SensorCard extends StatelessWidget {
     final compact = MediaQuery.sizeOf(context).width < 600;
     final textTheme = Theme.of(context).textTheme;
     final card = Container(
-      padding: EdgeInsets.all(compact ? 10 : 12),
+      padding: EdgeInsets.all(compact ? 14 : 18),
       decoration: BoxDecoration(
-        color: const Color(0xFF11141B),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF232833)),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF18232C), Color(0xFF101920)],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF2C4147)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: const Color(0xFFEF4444), size: compact ? 22 : 26),
-          SizedBox(height: compact ? 7 : 10),
+          Container(
+            width: compact ? 34 : 40,
+            height: compact ? 34 : 40,
+            decoration: BoxDecoration(
+              color: const Color(0xFF21483F),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon,
+                color: const Color(0xFF78E6C2), size: compact ? 19 : 22),
+          ),
+          SizedBox(height: compact ? 10 : 14),
           Text(
             title,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: (compact ? textTheme.labelMedium : textTheme.labelLarge)
                 ?.copyWith(
-              color: const Color(0xFFA7B0C0),
+              color: const Color(0xFFB5C7C8),
               height: 1.15,
             ),
           ),
@@ -64,7 +77,7 @@ class SensorCard extends StatelessWidget {
                       (compact ? textTheme.titleMedium : textTheme.titleLarge)
                           ?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: Colors.white,
+                    color: const Color(0xFFF0FAF7),
                     height: 1,
                   ),
                 ),
@@ -76,7 +89,7 @@ class SensorCard extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: 1),
                     child: Text(
                       unit,
-                      style: const TextStyle(color: Color(0xFFA7B0C0)),
+                      style: const TextStyle(color: Color(0xFF8FAEAB)),
                     ),
                   ),
                 ],
@@ -93,7 +106,7 @@ class SensorCard extends StatelessWidget {
         : Material(
             color: Colors.transparent,
             child: InkWell(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(20),
               onTap: onTap,
               child: card,
             ),

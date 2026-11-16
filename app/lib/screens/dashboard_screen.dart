@@ -18,6 +18,7 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     // EN: Use shorter spacing for the phone layout. TH: ลดระยะห่างบนหน้าจอมือถือ
     final compact = MediaQuery.sizeOf(context).width < 600;
+    final wide = MediaQuery.sizeOf(context).width >= 900;
     // EN: Rebuild when the shared sensor or connection state changes.
     // TH: สร้างหน้าจอใหม่เมื่อข้อมูลเซนเซอร์หรือสถานะเชื่อมต่อเปลี่ยน
     final state = context.watch<DozState>();
@@ -36,176 +37,230 @@ class DashboardScreen extends StatelessWidget {
     final activeAlerts =
         state.alerts.where((item) => item.userResponse.isEmpty).length;
 
-    return ListView(
-      padding: EdgeInsets.all(compact ? 8 : 16),
-      children: [
-        // EN: Orient the user before presenting measurements and alerts.
-        // TH: บอกผู้ใช้ว่าหน้านี้แสดงอะไร ก่อนเข้าสู่ค่าการวัดและการแจ้งเตือน
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Text(
-            uiText(context,
-                english: 'Your status now', thai: 'สถานะของคุณตอนนี้'),
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
+    return Center(
+        child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1140),
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(
+                  compact ? 4 : 18, 4, compact ? 4 : 18, 28),
+              children: [
+                // EN: Orient the user before presenting measurements and alerts.
+                // TH: บอกผู้ใช้ว่าหน้านี้แสดงอะไร ก่อนเข้าสู่ค่าการวัดและการแจ้งเตือน
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(2, 4, 2, 18),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            'DOZ  /  ${uiText(context, english: 'OVERVIEW', thai: 'ภาพรวม')}',
+                            style: const TextStyle(
+                                color: Color(0xFF78E6C2),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 2)),
+                        const SizedBox(height: 8),
+                        Text(
+                            uiText(context,
+                                english: 'Your status now',
+                                thai: 'สถานะของคุณตอนนี้'),
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineMedium
+                                ?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                    color: const Color(0xFFF2FAF7))),
+                        const SizedBox(height: 3),
+                        Text(
+                            uiText(context,
+                                english:
+                                    'A clear view of your device and latest readings',
+                                thai:
+                                    'ดูการเชื่อมต่อและค่าล่าสุดจากอุปกรณ์ในที่เดียว'),
+                            style: const TextStyle(color: Color(0xFF94A9AA))),
+                      ]),
                 ),
-          ),
-        ),
-        _WatchConnectionCard(state: state),
-        // EN: Make simulated values unmistakable whenever BLE is disconnected.
-        // TH: ระบุว่าค่าเป็นข้อมูลจำลองเสมอเมื่อไม่ได้เชื่อม BLE
-        if (!state.bleConnected) ...[
-          const SizedBox(height: 10),
-          const _DemoDataNotice(),
-        ],
-        SizedBox(height: compact ? 8 : 12),
-        StatusCard(
-          status: localizedRiskClass(context, risk.riskClass),
-          alertLevel: risk.alertLevel,
-          // EN: Use remote advice only when present; otherwise display the current risk message.
-          // TH: ใช้คำแนะนำระยะไกลเมื่อมี มิฉะนั้นแสดงข้อความจากผลความเสี่ยงปัจจุบัน
-          recommendation: state.aiAdvice.isNotEmpty
-              ? state.aiAdvice
-              : localizedRiskRecommendation(context, risk.recommendation),
-          cause: state.aiAdvice.isNotEmpty ? state.aiAdviceCause : '',
-          disclaimer: state.aiAdvice.isNotEmpty ? state.aiAdviceDisclaimer : '',
-        ),
-        if (rawTelemetry) ...[
-          const SizedBox(height: 8),
-          Text(
-            uiText(context,
-                english:
-                    '8 measured channels • AI drowsiness alerts are not available with the current firmware.',
-                thai:
-                    'ข้อมูลวัดจริง 8 ช่อง • เฟิร์มแวร์ปัจจุบันยังไม่แจ้งเตือนความง่วงด้วย AI'),
-            style: const TextStyle(color: Color(0xFFFFC66D)),
-          ),
-        ],
-        SizedBox(height: compact ? 8 : 12),
-        // EN: Separate action-oriented status from supporting detail.
-        // TH: แยกสถานะที่ต้องใช้ตัดสินใจออกจากข้อมูลประกอบ
-        _SectionHeading(
-          title: uiText(context, english: 'At a glance', thai: 'ภาพรวม'),
-          subtitle: uiText(context,
-              english: 'Alerts and device readiness',
-              thai: 'การแจ้งเตือนและความพร้อมของอุปกรณ์'),
-        ),
-        // EN: Summarize alerts and state separately from physical measurements.
-        // TH: แยกสรุป alert และสถานะออกจากค่าที่เซนเซอร์วัด
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: compact ? 1.42 : 1.15,
-          crossAxisSpacing: compact ? 8 : 10,
-          mainAxisSpacing: compact ? 8 : 10,
-          children: [
-            SensorCard(
-                title: uiText(context,
-                    english: 'Active Alerts', thai: 'การแจ้งเตือน'),
-                value: '$activeAlerts',
-                unit: '',
-                icon: Icons.warning_amber,
-                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                    builder: (_) => const Scaffold(
-                          body: SafeArea(child: AlertHistoryScreen()),
-                        )))),
-            SensorCard(
-                title: uiText(context,
-                    english: 'Latest Alert Level',
-                    thai: 'ระดับแจ้งเตือนล่าสุด'),
-                value: localizedAlertLevel(context, risk.alertLevel),
-                unit: '',
-                icon: Icons.shield_outlined),
-            SensorCard(
-                title: uiText(context,
-                    english: 'Detected Risk', thai: 'ความเสี่ยงที่ตรวจพบ'),
-                value: localizedRiskClass(context, risk.riskClass),
-                unit: '',
-                icon: Icons.radar_outlined),
-            SensorCard(
-                title: uiText(context,
-                    english: 'Device Battery', thai: 'แบตเตอรี่อุปกรณ์'),
-                value: state.deviceBattery?.toString() ?? '—',
-                unit: state.deviceBattery == null ? '' : '%',
-                icon: Icons.battery_5_bar),
-          ],
-        ),
-        SizedBox(height: compact ? 8 : 12),
-        _SectionHeading(
-          title: uiText(context,
-              english: 'Sensor readings', thai: 'ข้อมูลเซนเซอร์'),
-          subtitle: rawTelemetry
-              ? uiText(context,
-                  english:
-                      '8 channels from device · 1-second means, not full waveforms',
-                  thai:
-                      'ข้อมูล 8 ช่องจากอุปกรณ์ · ค่าเฉลี่ย 1 วินาที ไม่ใช่คลื่นสัญญาณเต็ม')
-              : uiText(context,
-                  english:
-                      'Waiting for device data · no sensor readings available',
-                  thai: 'รอข้อมูลจากอุปกรณ์ · ยังไม่มีค่าเซนเซอร์จริง'),
-        ),
-        // EN: Display only the eight measured channels in the current firmware.
-        // TH: แสดงเฉพาะแปดช่องที่เฟิร์มแวร์ปัจจุบันวัดและส่งมา
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: compact ? 1.42 : 1.15,
-          crossAxisSpacing: compact ? 8 : 10,
-          mainAxisSpacing: compact ? 8 : 10,
-          children: [
-            SensorCard(
-                title: 'MAX30102 Red mean',
-                value: rawTelemetry ? '${sensor.rawRed}' : '—',
-                unit: rawTelemetry ? 'ADC' : '',
-                icon: Icons.favorite_outline),
-            SensorCard(
-                title: 'MAX30102 IR mean',
-                value: rawTelemetry ? '${sensor.rawIr}' : '—',
-                unit: rawTelemetry ? 'ADC' : '',
-                icon: Icons.air_outlined),
-            SensorCard(
-                title: 'MPU6050 Accel X',
-                value: rawTelemetry ? sensor.accelX.toStringAsFixed(2) : '—',
-                unit: rawTelemetry ? 'm/s²' : '',
-                icon: Icons.bolt_outlined),
-            SensorCard(
-                title: 'MPU6050 Accel Y',
-                value: rawTelemetry ? sensor.accelY.toStringAsFixed(2) : '—',
-                unit: rawTelemetry ? 'm/s²' : '',
-                icon: Icons.sensors_outlined),
-            SensorCard(
-                title: 'MPU6050 Accel Z',
-                value: rawTelemetry ? sensor.accelZ.toStringAsFixed(2) : '—',
-                unit: rawTelemetry ? 'm/s²' : '',
-                icon: Icons.thermostat_outlined),
-            SensorCard(
-                title: 'MPU6050 Gyro X',
-                value: rawTelemetry ? sensor.gyroX.toStringAsFixed(2) : '—',
-                unit: rawTelemetry ? '°/s' : '',
-                icon: Icons.screen_rotation_alt),
-            SensorCard(
-                title: 'MPU6050 Gyro Y',
-                value: rawTelemetry ? sensor.gyroY.toStringAsFixed(2) : '—',
-                unit: rawTelemetry ? '°/s' : '',
-                icon: Icons.screen_rotation),
-            SensorCard(
-                title: 'MPU6050 Gyro Z',
-                value: rawTelemetry ? sensor.gyroZ.toStringAsFixed(2) : '—',
-                unit: rawTelemetry ? '°/s' : '',
-                icon: Icons.rotate_90_degrees_ccw),
-          ],
-        ),
-        SizedBox(height: compact ? 8 : 12),
-        // EN: Explain Unknown as unavailable analysis, not a Safe prediction.
-        // TH: อธิบาย Unknown ว่ายังไม่มีผลวิเคราะห์ ไม่ใช่ผล Safe
-        RiskExplanationCard(risk: risk),
-        SizedBox(height: compact ? 8 : 12),
-        if (state.profileDetailsProvided) _PersonalInfo(state: state),
-      ],
-    );
+                _WatchConnectionCard(state: state),
+                // EN: Make simulated values unmistakable whenever BLE is disconnected.
+                // TH: ระบุว่าค่าเป็นข้อมูลจำลองเสมอเมื่อไม่ได้เชื่อม BLE
+                if (!state.bleConnected) ...[
+                  const SizedBox(height: 10),
+                  const _DemoDataNotice(),
+                ],
+                SizedBox(height: compact ? 14 : 20),
+                StatusCard(
+                  status: localizedRiskClass(context, risk.riskClass),
+                  alertLevel: risk.alertLevel,
+                  // EN: Use remote advice only when present; otherwise display the current risk message.
+                  // TH: ใช้คำแนะนำระยะไกลเมื่อมี มิฉะนั้นแสดงข้อความจากผลความเสี่ยงปัจจุบัน
+                  recommendation: state.aiAdvice.isNotEmpty
+                      ? state.aiAdvice
+                      : localizedRiskRecommendation(
+                          context, risk.recommendation),
+                  cause: state.aiAdvice.isNotEmpty ? state.aiAdviceCause : '',
+                  disclaimer:
+                      state.aiAdvice.isNotEmpty ? state.aiAdviceDisclaimer : '',
+                ),
+                if (rawTelemetry) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    uiText(context,
+                        english:
+                            '8 measured channels • AI drowsiness alerts are not available with the current firmware.',
+                        thai:
+                            'ข้อมูลวัดจริง 8 ช่อง • เฟิร์มแวร์ปัจจุบันยังไม่แจ้งเตือนความง่วงด้วย AI'),
+                    style: const TextStyle(color: Color(0xFFFFC66D)),
+                  ),
+                ],
+                SizedBox(height: compact ? 16 : 24),
+                // EN: Separate action-oriented status from supporting detail.
+                // TH: แยกสถานะที่ต้องใช้ตัดสินใจออกจากข้อมูลประกอบ
+                _SectionHeading(
+                  title:
+                      uiText(context, english: 'At a glance', thai: 'ภาพรวม'),
+                  subtitle: uiText(context,
+                      english: 'Alerts and device readiness',
+                      thai: 'การแจ้งเตือนและความพร้อมของอุปกรณ์'),
+                ),
+                // EN: Summarize alerts and state separately from physical measurements.
+                // TH: แยกสรุป alert และสถานะออกจากค่าที่เซนเซอร์วัด
+                GridView.count(
+                  crossAxisCount: wide ? 4 : 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  childAspectRatio: compact
+                      ? 1.0
+                      : wide
+                          ? 1.3
+                          : 1.15,
+                  crossAxisSpacing: compact ? 8 : 10,
+                  mainAxisSpacing: compact ? 8 : 10,
+                  children: [
+                    SensorCard(
+                        title: uiText(context,
+                            english: 'Active Alerts', thai: 'การแจ้งเตือน'),
+                        value: '$activeAlerts',
+                        unit: '',
+                        icon: Icons.warning_amber,
+                        onTap: () =>
+                            Navigator.of(context).push(MaterialPageRoute<void>(
+                                builder: (_) => const Scaffold(
+                                      body:
+                                          SafeArea(child: AlertHistoryScreen()),
+                                    )))),
+                    SensorCard(
+                        title: uiText(context,
+                            english: 'Latest Alert Level',
+                            thai: 'ระดับแจ้งเตือนล่าสุด'),
+                        value: localizedAlertLevel(context, risk.alertLevel),
+                        unit: '',
+                        icon: Icons.shield_outlined),
+                    SensorCard(
+                        title: uiText(context,
+                            english: 'Detected Risk',
+                            thai: 'ความเสี่ยงที่ตรวจพบ'),
+                        value: localizedRiskClass(context, risk.riskClass),
+                        unit: '',
+                        icon: Icons.radar_outlined),
+                    SensorCard(
+                        title: uiText(context,
+                            english: 'Device Battery',
+                            thai: 'แบตเตอรี่อุปกรณ์'),
+                        value: state.deviceBattery?.toString() ?? '—',
+                        unit: state.deviceBattery == null ? '' : '%',
+                        icon: Icons.battery_5_bar),
+                  ],
+                ),
+                SizedBox(height: compact ? 8 : 12),
+                _SectionHeading(
+                  title: uiText(context,
+                      english: 'Sensor readings', thai: 'ข้อมูลเซนเซอร์'),
+                  subtitle: rawTelemetry
+                      ? uiText(context,
+                          english:
+                              '8 channels from device · 1-second means, not full waveforms',
+                          thai:
+                              'ข้อมูล 8 ช่องจากอุปกรณ์ · ค่าเฉลี่ย 1 วินาที ไม่ใช่คลื่นสัญญาณเต็ม')
+                      : uiText(context,
+                          english:
+                              'Waiting for device data · no sensor readings available',
+                          thai: 'รอข้อมูลจากอุปกรณ์ · ยังไม่มีค่าเซนเซอร์จริง'),
+                ),
+                // EN: Display only the eight measured channels in the current firmware.
+                // TH: แสดงเฉพาะแปดช่องที่เฟิร์มแวร์ปัจจุบันวัดและส่งมา
+                GridView.count(
+                  crossAxisCount: wide ? 4 : 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  childAspectRatio: compact
+                      ? 1.0
+                      : wide
+                          ? 1.3
+                          : 1.15,
+                  crossAxisSpacing: compact ? 8 : 10,
+                  mainAxisSpacing: compact ? 8 : 10,
+                  children: [
+                    SensorCard(
+                        title: 'MAX30102 Red mean',
+                        value: rawTelemetry ? '${sensor.rawRed}' : '—',
+                        unit: rawTelemetry ? 'ADC' : '',
+                        icon: Icons.favorite_outline),
+                    SensorCard(
+                        title: 'MAX30102 IR mean',
+                        value: rawTelemetry ? '${sensor.rawIr}' : '—',
+                        unit: rawTelemetry ? 'ADC' : '',
+                        icon: Icons.air_outlined),
+                    SensorCard(
+                        title: 'MPU6050 Accel X',
+                        value: rawTelemetry
+                            ? sensor.accelX.toStringAsFixed(2)
+                            : '—',
+                        unit: rawTelemetry ? 'm/s²' : '',
+                        icon: Icons.bolt_outlined),
+                    SensorCard(
+                        title: 'MPU6050 Accel Y',
+                        value: rawTelemetry
+                            ? sensor.accelY.toStringAsFixed(2)
+                            : '—',
+                        unit: rawTelemetry ? 'm/s²' : '',
+                        icon: Icons.sensors_outlined),
+                    SensorCard(
+                        title: 'MPU6050 Accel Z',
+                        value: rawTelemetry
+                            ? sensor.accelZ.toStringAsFixed(2)
+                            : '—',
+                        unit: rawTelemetry ? 'm/s²' : '',
+                        icon: Icons.thermostat_outlined),
+                    SensorCard(
+                        title: 'MPU6050 Gyro X',
+                        value: rawTelemetry
+                            ? sensor.gyroX.toStringAsFixed(2)
+                            : '—',
+                        unit: rawTelemetry ? '°/s' : '',
+                        icon: Icons.screen_rotation_alt),
+                    SensorCard(
+                        title: 'MPU6050 Gyro Y',
+                        value: rawTelemetry
+                            ? sensor.gyroY.toStringAsFixed(2)
+                            : '—',
+                        unit: rawTelemetry ? '°/s' : '',
+                        icon: Icons.screen_rotation),
+                    SensorCard(
+                        title: 'MPU6050 Gyro Z',
+                        value: rawTelemetry
+                            ? sensor.gyroZ.toStringAsFixed(2)
+                            : '—',
+                        unit: rawTelemetry ? '°/s' : '',
+                        icon: Icons.rotate_90_degrees_ccw),
+                  ],
+                ),
+                SizedBox(height: compact ? 8 : 12),
+                // EN: Explain Unknown as unavailable analysis, not a Safe prediction.
+                // TH: อธิบาย Unknown ว่ายังไม่มีผลวิเคราะห์ ไม่ใช่ผล Safe
+                RiskExplanationCard(risk: risk),
+                SizedBox(height: compact ? 8 : 12),
+                if (state.profileDetailsProvided) _PersonalInfo(state: state),
+              ],
+            )));
   }
 }
 
@@ -220,21 +275,19 @@ class _SectionHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 6, 2, 10),
+      padding: const EdgeInsets.fromLTRB(2, 12, 2, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 2),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800, color: const Color(0xFFF2FAF7))),
+          const SizedBox(height: 4),
           Text(subtitle,
               style: Theme.of(context)
                   .textTheme
                   .bodySmall
-                  ?.copyWith(color: const Color(0xFFA7B0C0))),
+                  ?.copyWith(color: const Color(0xFF94A9AA))),
         ],
       ),
     );
@@ -262,16 +315,19 @@ class _WatchConnectionCard extends StatelessWidget {
             thai: 'ข้อมูลตัวอย่าง • ไม่ได้มาจากอุปกรณ์จริง');
 
     return Container(
-      padding: EdgeInsets.all(compact ? 14 : 18),
+      padding: EdgeInsets.all(compact ? 18 : 24),
       decoration: BoxDecoration(
-        color: const Color(0xFF11141B),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF232833)),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: const Color(0xFF32665B)),
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF151922), Color(0xFF0B0D12)],
+          colors: [Color(0xFF1E4A43), Color(0xFF10252D), Color(0xFF0D1820)],
         ),
+        boxShadow: const [
+          BoxShadow(
+              color: Color(0x4408161B), blurRadius: 24, offset: Offset(0, 12))
+        ],
       ),
       child: Row(
         children: [
@@ -291,7 +347,8 @@ class _WatchConnectionCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   '$connectedText • $signalText',
-                  style: const TextStyle(color: Color(0xFFA7B0C0)),
+                  style:
+                      const TextStyle(color: Color(0xFFB8D1CB), height: 1.35),
                 ),
                 const SizedBox(height: 12),
                 Wrap(
@@ -397,9 +454,9 @@ class _WatchChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF050608),
+        color: const Color(0xFF18332F),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFF343B4A)),
+        border: Border.all(color: const Color(0xFF3D6A60)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
