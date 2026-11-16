@@ -97,6 +97,12 @@ class NotificationService {
     required RiskResult
         riskResult, // EN: Receive the result used to choose urgency. TH: รับผลที่ใช้กำหนดระดับความเร่งด่วน
   }) async {
+    // EN: Never turn unavailable analysis or a Safe state into an OS risk alert.
+    // TH: ห้ามส่งผลที่ยังวิเคราะห์ไม่ได้หรือสถานะ Safe เป็นการเตือนความเสี่ยงของระบบ
+    if (!const {'Watch', 'Warning', 'Emergency'}
+        .contains(riskResult.alertLevel)) {
+      return false;
+    }
     // EN: Perform plugin calls without blocking the UI thread. TH: เรียก plugin แบบ asynchronous ไม่บล็อก UI
     try {
       // EN: Convert OS-plugin failures into a safe delivery result. TH: แปลงความผิดพลาดจาก OS plugin เป็นผลส่งที่ปลอดภัย
@@ -112,8 +118,8 @@ class NotificationService {
           'Emergency'; // EN: Preserve higher urgency for emergency alerts. TH: คงความเร่งด่วนที่สูงกว่าสำหรับ Emergency
       final title =
           isEmergency // EN: Select a title without including a diagnosis or measurements. TH: เลือกหัวข้อโดยไม่ใส่การวินิจฉัยหรือค่าการวัด
-              ? 'Emergency health alert' // EN: Mark the urgent case without revealing specific values. TH: ระบุเหตุเร่งด่วนโดยไม่เปิดเผยค่ารายตัว
-              : 'Health warning detected'; // EN: Use a generic title for other warning levels. TH: ใช้หัวข้อทั่วไปสำหรับระดับเตือนอื่น
+              ? 'Urgent doz alert' // EN: Mark urgency without making a medical claim. TH: ระบุความเร่งด่วนโดยไม่อ้างการวินิจฉัย
+              : 'Doz attention alert'; // EN: Identify a device risk notice without claiming a health diagnosis. TH: ระบุการเตือนจากอุปกรณ์โดยไม่อ้างการวินิจฉัยสุขภาพ
       final body =
           isEmergency // EN: Keep health details out of operating-system previews. TH: ซ่อนรายละเอียดสุขภาพจาก preview ของระบบปฏิบัติการ
               ? 'Check the wearer now. Open the app for details.' // EN: Prompt an immediate check without revealing measurements. TH: ให้ตรวจผู้สวมใส่ทันทีโดยไม่เปิดเผยค่าการวัด

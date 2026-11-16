@@ -71,6 +71,15 @@ class DashboardScreen extends StatelessWidget {
           cause: state.aiAdvice.isNotEmpty ? state.aiAdviceCause : '',
           disclaimer: state.aiAdvice.isNotEmpty ? state.aiAdviceDisclaimer : '',
         ),
+        if (rawTelemetry) ...[
+          const SizedBox(height: 8),
+          Text(
+            uiText(context,
+                english: '8 measured channels • AI drowsiness alerts are not available with the current firmware.',
+                thai: 'ข้อมูลวัดจริง 8 ช่อง • เฟิร์มแวร์ปัจจุบันยังไม่แจ้งเตือนความง่วงด้วย AI'),
+            style: const TextStyle(color: Color(0xFFFFC66D)),
+          ),
+        ],
         SizedBox(height: compact ? 8 : 12),
         // EN: Separate action-oriented status from supporting detail.
         // TH: แยกสถานะที่ต้องใช้ตัดสินใจออกจากข้อมูลประกอบ
@@ -127,8 +136,8 @@ class DashboardScreen extends StatelessWidget {
               english: 'Sensor readings', thai: 'ข้อมูลเซนเซอร์'),
           subtitle: rawTelemetry
               ? uiText(context,
-                  english: 'Raw device values · not a diagnosis',
-                  thai: 'ค่าดิบจากอุปกรณ์ · ไม่ใช่ผลวินิจฉัย')
+                  english: '8 channels from device · 1-second means, not full waveforms',
+                  thai: 'ข้อมูล 8 ช่องจากอุปกรณ์ · ค่าเฉลี่ย 1 วินาที ไม่ใช่คลื่นสัญญาณเต็ม')
               : uiText(context,
                   english: 'Example values for preview only',
                   thai: 'ค่าตัวอย่างเพื่อดูหน้าจอเท่านั้น'),
@@ -232,14 +241,36 @@ class DashboardScreen extends StatelessWidget {
                     ? ''
                     : (rawTelemetry ? 'm/s²' : '°C'),
                 icon: Icons.thermostat_outlined),
-            SensorCard(
-                title:
-                    uiText(context, english: 'BLE Status', thai: 'สถานะ BLE'),
-                value: state.bleConnected
-                    ? 'BLE'
-                    : uiText(context, english: 'Demo BLE', thai: 'BLE สาธิต'),
-                unit: '',
-                icon: Icons.bluetooth),
+            if (rawTelemetry || waitingForDevicePacket) ...[
+              SensorCard(
+                  title: 'MPU6050 Gyro X',
+                  value: waitingForDevicePacket
+                      ? '—'
+                      : sensor.gyroX.toStringAsFixed(2),
+                  unit: waitingForDevicePacket ? '' : '°/s',
+                  icon: Icons.screen_rotation_alt),
+              SensorCard(
+                  title: 'MPU6050 Gyro Y',
+                  value: waitingForDevicePacket
+                      ? '—'
+                      : sensor.gyroY.toStringAsFixed(2),
+                  unit: waitingForDevicePacket ? '' : '°/s',
+                  icon: Icons.screen_rotation),
+              SensorCard(
+                  title: 'MPU6050 Gyro Z',
+                  value: waitingForDevicePacket
+                      ? '—'
+                      : sensor.gyroZ.toStringAsFixed(2),
+                  unit: waitingForDevicePacket ? '' : '°/s',
+                  icon: Icons.rotate_90_degrees_ccw),
+            ] else
+              SensorCard(
+                  title: uiText(context,
+                      english: 'BLE Status', thai: 'สถานะ BLE'),
+                  value: uiText(context,
+                      english: 'Demo BLE', thai: 'BLE สาธิต'),
+                  unit: '',
+                  icon: Icons.bluetooth),
           ],
         ),
         SizedBox(height: compact ? 8 : 12),

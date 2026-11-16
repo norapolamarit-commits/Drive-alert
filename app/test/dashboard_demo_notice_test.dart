@@ -143,7 +143,10 @@ void main() {
     expect(find.text('MAX30102 Red'), findsOneWidget);
     expect(find.text('MAX30102 IR'), findsOneWidget);
     expect(find.text('MPU6050 Accel X'), findsOneWidget);
-    expect(find.text('—'), findsNWidgets(6));
+    expect(find.text('MPU6050 Gyro X'), findsOneWidget);
+    expect(find.text('MPU6050 Gyro Y'), findsOneWidget);
+    expect(find.text('MPU6050 Gyro Z'), findsOneWidget);
+    expect(find.text('—'), findsNWidgets(9));
     expect(find.textContaining('AI analysis unavailable'), findsNWidgets(2));
     expect(find.textContaining('Demo data only'), findsNothing);
 
