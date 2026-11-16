@@ -280,6 +280,17 @@ class AuthService {
     ); // EN: Return the SDK authentication future. TH: คืน future การยืนยันจาก SDK
   } // EN: Finish password sign-in. TH: จบการเข้าสู่ระบบด้วย password
 
+  // EN: Resend a pending sign-up confirmation to the address already used for registration.
+  // TH: ส่งอีเมลยืนยันการสมัครซ้ำไปยังที่อยู่ที่เคยใช้สมัคร
+  static Future<void> resendSignupConfirmation(String email) async {
+    _requireInitialized(); // EN: Require a configured Auth client. TH: บังคับให้ Auth พร้อมก่อนเรียก
+    await Supabase.instance.client.auth.resend(
+      type: OtpType.signup, // EN: Request a signup confirmation, not a password reset. TH: ขออีเมลยืนยันการสมัคร ไม่ใช่รีเซ็ตรหัสผ่าน
+      email: _validatedEmail(email), // EN: Validate the destination address. TH: ตรวจอีเมลปลายทาง
+      emailRedirectTo: callbackUri, // EN: Return to the current web origin or mobile deep link. TH: กลับเว็บปัจจุบันหรือ deep link มือถือ
+    ); // EN: Wait for the provider to accept the resend request. TH: รอผู้ให้บริการรับคำขอส่งซ้ำ
+  } // EN: Finish confirmation resend. TH: จบการส่งอีเมลยืนยันซ้ำ
+
   // EN: Create an account and request the registered deep-link callback.
   // TH: สร้างบัญชีและกำหนด deep link สำหรับ callback ยืนยันบัญชี
   static Future<AuthResponse> signUp(String email, String password) {

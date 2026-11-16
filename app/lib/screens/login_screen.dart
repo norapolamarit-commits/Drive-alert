@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../legal/privacy_policy.dart';
 import '../main.dart';
@@ -227,6 +228,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: _busy ? null : _resetPassword,
                     child: Text(_copy('Forgot password?', 'ลืมรหัสผ่าน')),
                   ),
+                if (!_creatingAccount)
+                  TextButton(
+                    onPressed: _busy ? null : _resendConfirmation,
+                    child: Text(_copy('Resend verification email',
+                        'ส่งอีเมลยืนยันบัญชีอีกครั้ง')),
+                  ),
                 TextButton(
                   onPressed: _busy
                       ? null
@@ -311,6 +318,23 @@ class _LoginScreenState extends State<LoginScreen> {
         if (user == null) throw StateError('ไม่พบผู้ใช้ที่ยืนยันตัวตน');
         await _enterAccount(user.id);
       }
+    } on AuthApiException catch (error) {
+      if (mounted) {
+        setState(() {
+          _message = switch (error.code) {
+            'email_not_confirmed' => _copy(
+                'Email not confirmed. Open the verification link in your inbox, or resend it below.',
+                'ยังไม่ยืนยันอีเมล โปรดกดลิงก์ในกล่องจดหมายหรือส่งลิงก์อีกครั้งด้านล่าง'),
+            'over_email_send_rate_limit' || 'over_request_rate_limit' =>
+              _copy('Too many requests. Wait a while before trying again.',
+                  'ส่งคำขอถี่เกินไป โปรดรอสักครู่แล้วลองใหม่'),
+            _ => _copy(
+                'Could not continue. Check your email, password, email verification, and Auth configuration.',
+                'ดำเนินการไม่สำเร็จ ตรวจสอบอีเมล/รหัสผ่าน การยืนยันอีเมล และการตั้งค่า Auth'),
+          };
+          _messageIsError = true;
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -377,6 +401,54 @@ class _LoginScreenState extends State<LoginScreen> {
           _messageIsError = true;
         });
       }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _resendConfirmation() async {
+    // EN: Ask only for the address; confirmation resend never needs the password.
+    // TH: ใช้เพียงอีเมล การส่งลิงก์ยืนยันซ้ำไม่ต้องใช้รหัสผ่าน
+    final email = _email.text.trim();
+    if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
+      setState(() {
+        _message = _copy('Enter a valid email address first.',
+            'กรอกอีเมลให้ถูกต้องก่อน');
+        _messageIsError = true;
+      });
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _message = null;
+      _messageIsError = false;
+    });
+    try {
+      await AuthService.resendSignupConfirmation(email);
+      if (!mounted) return;
+      setState(() {
+        _message = _copy('If the account needs confirmation, check your inbox and spam folder.',
+            'หากบัญชีรอยืนยัน โปรดตรวจกล่องจดหมายและโฟลเดอร์สแปม');
+        _messageIsError = false;
+      });
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _message = error.code == 'over_email_send_rate_limit' ||
+                error.code == 'over_request_rate_limit'
+            ? _copy('Too many requests. Wait a while before trying again.',
+                'ส่งคำขอถี่เกินไป โปรดรอสักครู่แล้วลองใหม่')
+            : _copy('Could not request another email. Try again later.',
+                'ขอส่งอีเมลซ้ำไม่สำเร็จ โปรดลองภายหลัง');
+        _messageIsError = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _message = _copy('Could not request another email. Try again later.',
+            'ขอส่งอีเมลซ้ำไม่สำเร็จ โปรดลองภายหลัง');
+        _messageIsError = true;
+      });
     } finally {
       if (mounted) setState(() => _busy = false);
     }
